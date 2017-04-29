@@ -5,13 +5,24 @@ import (
 	"io/ioutil"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/xeusalmighty/chip8emu/chip8"
+	"flag"
+	"log"
+)
+
+var (
+	// Command line flags and options
+	filenameFlag = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load in the emulator")
+	widthFlag    = flag.Int("width", 1024, "The width of the emulator window")
+	heightFlag   = flag.Int("height", 768, "The height of the emulator window")
 )
 
 // Entry point for the emulator
 func main() {
+	parseCommandLine() // parse flags
+
 	// load a test program
 	cpu := chip8.NewCpu()
-	cpu.LoadProgram(read("programs/GAMES/PONG"))
+	cpu.LoadProgram(read(*filenameFlag))
 
 	run(func(renderer *sdl.Renderer) {
 		cpu.NextCycle() // advance the active program by 1 cycle
@@ -40,7 +51,7 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 	sdl.Init(sdl.INIT_VIDEO)
 
 	// create the main window
-	window, err := sdl.CreateWindow("chip8emu", 100, 100, 1024, 768, sdl.WINDOW_SHOWN)
+	window, err := sdl.CreateWindow("chip8emu", 100, 100, *widthFlag, *heightFlag, sdl.WINDOW_SHOWN)
 	if err != nil {
 		panic("Failed to create main window")
 	}
@@ -88,4 +99,24 @@ func read(filename string) []byte {
 	}
 
 	return bytes
+}
+
+// Parse and validate command line arguments.
+func parseCommandLine() {
+	flag.Parse()
+
+	if *filenameFlag == "" {
+		flag.Usage()
+		log.Fatal("A valid filename was expected")
+	}
+
+	if *widthFlag == 0 {
+		flag.Usage()
+		log.Fatal("A valid width was expected")
+	}
+
+	if *heightFlag == 0 {
+		flag.Usage()
+		log.Fatal("A valid height was expected")
+	}
 }
