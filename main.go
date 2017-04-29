@@ -9,27 +9,50 @@ import (
 
 // Entry point for the emulator
 func main() {
-	// load our test program
+	// load a test program
 	cpu := chip8.NewCpu()
 	cpu.LoadProgram(read("programs/GAMES/PONG"))
 
-	nextFrame := func() {
-		cpu.NextCycle()
-	}
+	run(func(renderer *sdl.Renderer) {
+		cpu.NextCycle() // advance the active program by 1 cycle
+		if cpu.DrawFlag { // render the chip8 display, if it's been updated
+			// clear the display
+			renderer.SetDrawColor(0, 0, 0, 0)
+			renderer.Clear()
 
-	run(100, 100, 800, 600, nextFrame)
+			// render each pixel
+			renderer.SetDrawColor(255, 255, 255, 255)
+			for x := 0; x < 64; x++ {
+				for y := 0; y < 32; y++ {
+					if cpu.Pixels[x*y] > 0 {
+						renderer.DrawPoint(x, y)
+					}
+				}
+			}
+
+			// present the display
+			renderer.Present()
+		}
+	})
 }
 
 // Bootstraps and executes the application via SDL
-func run(x, y, w, h int, nextFrame func()) {
-	sdl.Init(sdl.INIT_VIDEO | sdl.INIT_AUDIO)
+func run(nextFrame func(renderer *sdl.Renderer)) {
+	sdl.Init(sdl.INIT_VIDEO)
 
-	// create a window with OpenGL
-	window, err := sdl.CreateWindow("chip8emu", x, y, w, h, sdl.WINDOW_OPENGL)
+	// create the main window
+	window, err := sdl.CreateWindow("chip8emu", 100, 100, 1024, 768, sdl.WINDOW_SHOWN)
 	if err != nil {
 		panic("Failed to create main window")
 	}
 	defer window.Destroy()
+
+	// create the main renderer
+	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
+	if err != nil {
+		panic("Failed to create main renderer")
+	}
+	defer renderer.Destroy()
 
 	// runs the SDL event loop and calls the given callback function after event processing each cycle
 	running := true
@@ -45,8 +68,7 @@ func run(x, y, w, h int, nextFrame func()) {
 				}
 			}
 		}
-		nextFrame()   // execute the next frame
-		sdl.Delay(16) // don't eat the cpu
+		nextFrame(renderer) // execute the next frame
 	}
 
 	sdl.Quit()
