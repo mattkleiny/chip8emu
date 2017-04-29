@@ -16,11 +16,11 @@ func main() {
 	run(func(renderer *sdl.Renderer) {
 		cpu.NextCycle() // advance the active program by 1 cycle
 		if cpu.DrawFlag { // render the chip8 display, if it's been updated
-			// clear the display
+			// clear the surface
 			renderer.SetDrawColor(0, 0, 0, 0)
 			renderer.Clear()
-
-			// render each pixel
+			// render each pixel in the pixel buffer
+			// TODO: consider using a bitmap or surface here, instead?
 			renderer.SetDrawColor(255, 255, 255, 255)
 			for x := 0; x < 64; x++ {
 				for y := 0; y < 32; y++ {
@@ -29,8 +29,7 @@ func main() {
 					}
 				}
 			}
-
-			// present the display
+			// present the surface
 			renderer.Present()
 		}
 	})
@@ -68,7 +67,8 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 				}
 			}
 		}
-		nextFrame(renderer) // execute the next frame
+		// execute the next frame if we don't have any further events to process
+		nextFrame(renderer)
 	}
 
 	sdl.Quit()

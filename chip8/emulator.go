@@ -32,7 +32,8 @@ type CPU struct {
 
 	V     [16]byte   // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag
 	Stack [16]uint16 // The currently executing instruction; references the program counter
-	I, PC uint16     // An index register I, and a program counter PC which can have values from 0x000 to 0xFFF
+	I     uint16     // An index register, I
+	PC    uint16     // A program counter PC which can have values from 0x000 to 0xFFF
 	SP    uint16     // The stack pointer
 
 	Keypad   [16]byte      // 16-key hexadecimal keypad
@@ -91,8 +92,32 @@ func (cpu *CPU) NextCycle() {
 
 		// decode and execute the opcode
 		switch opcode & 0xF000 {
+		case 0x0000:
+			// 0x0nnn - SYS addr
+			// Jump to a machine code routine at nnn.
+			//
+			// This instruction is only used on the old computers on which Chip-8 was originally
+			// implemented. It is ignored by modern interpreters.
+			break
+
+		case 0x00EE:
+			// 0x00EE - RET
+			// Return from a subroutine.
+			//
+			// The interpreter sets the program counter to the address at the top of the stack, then
+			// subtracts 1 from the stack pointer.
+			cpu.PC = cpu.Stack[cpu.SP]
+			cpu.SP -= 1
+
+		case 0x1000:
+			// 1nnn - JP addr
+			// Jump to location nnn.
+			//
+			// The interpreter sets the program counter to nnn.
+			cpu.PC = uint16(opcode & 0x0FFF)
+
 		case 0x2000:
-			// 2nnn - CALL addr
+			// 0x2nnn - CALL addr
 			// Call subroutine at nnn.
 			//
 			// The interpreter increments the stack pointer, then puts the current PC on the top of
@@ -101,8 +126,24 @@ func (cpu *CPU) NextCycle() {
 			cpu.SP += 1
 			cpu.PC = uint16(opcode & 0x0FFF)
 
+		case 0x3000:
+			// 0x3xkk - SE Vx, byte
+			// Skip next instruction if Vx = kk.
+			//
+			// The interpreter compares register Vx to kk, and if they are equal, increments the
+			// program counter by 2.
+			panic("TODO")
+
+		case 0x4000:
+			// 0x4xkk - SNE Vx, byte
+			// Skip next instruction if Vx != kk.
+			//
+			// The interpreter compares register Vx to kk, and if they are not equal, increments
+			// the program counter by 2.
+			panic("TODO")
+
 		case 0x0004:
-			// 8xy4 - ADD Vx, Vy
+			// 0x8xy4 - ADD Vx, Vy
 			// Set Vx = Vx + Vy, set VF = carry.
 			//
 			// The values of Vx and Vy are added together. If the result is greater than 8 bits
@@ -119,7 +160,7 @@ func (cpu *CPU) NextCycle() {
 			cpu.PC += 2
 
 		case 0xA000:
-			// Annn - LD I, addr
+			// 0xAnnn - LD I, addr
 			// Set I = nnn.
 			//
 			// The value of register I is set to nnn.
@@ -127,7 +168,7 @@ func (cpu *CPU) NextCycle() {
 			cpu.PC += 2
 
 		case 0x0033:
-			// Fx33 - LD B, Vx
+			// 0xFx33 - LD B, Vx
 			// Store BCD representation of Vx in memory locations I, I+1, and I+2.
 			//
 			// The interpreter takes the decimal value of Vx, and places the hundreds digit in memory
@@ -139,7 +180,7 @@ func (cpu *CPU) NextCycle() {
 			cpu.PC += 2
 
 		case 0xD000:
-			// Dxyn - DRW Vx, Vy, nibble
+			// 0xDxyn - DRW Vx, Vy, nibble
 			// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
 			//
 			// The interpreter reads n bytes from memory, starting at the address stored in I.
@@ -155,14 +196,22 @@ func (cpu *CPU) NextCycle() {
 			y := uint16(cpu.V[r2])
 			height := uint16(opcode & 0x000F)
 
+			const ScanWidth = 8
+			const ScanHeight = 64
+
+			// scan the existing display in lines
 			for yline := uint16(0); yline < height; yline++ {
 				pixel := cpu.Memory[cpu.I+yline]
-				for xline := uint16(0); xline < 8; xline++ {
+				for xline := uint16(0); xline < ScanWidth; xline++ {
+					// check to see if a pixel is present in the given line
 					if (pixel & (0x80 >> xline)) != 0 {
-						if cpu.Pixels[x+xline+((y+yline)*64)] == 1 {
+						index := x + xline + ((y + yline) * ScanHeight)
+
+						if cpu.Pixels[index] == 1 {
 							cpu.V[0xF] = 1
 						}
-						cpu.Pixels[x+xline+((y+yline)*64)] ^= 1
+
+						cpu.Pixels[index] ^= 1
 					}
 				}
 			}
@@ -175,7 +224,7 @@ func (cpu *CPU) NextCycle() {
 		}
 	}
 
-	// updates the CPU timers
+	// updates the timers
 	updateTimers := func() {
 		if cpu.DelayTimer > 0 {
 			cpu.DelayTimer -= 1
