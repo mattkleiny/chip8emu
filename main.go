@@ -3,10 +3,10 @@ package main
 import (
 	"os"
 	"io/ioutil"
-	"github.com/veandco/go-sdl2/sdl"
-	"github.com/xeusalmighty/chip8emu/chip8"
 	"flag"
 	"log"
+	"github.com/veandco/go-sdl2/sdl"
+	"github.com/xeusalmighty/chip8emu/chip8"
 )
 
 var (
