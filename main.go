@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"io/ioutil"
 	"flag"
 	"log"
@@ -22,7 +21,7 @@ func main() {
 
 	// load a test program
 	cpu := chip8.NewCpu()
-	cpu.LoadProgram(read(*filenameFlag))
+	cpu.LoadProgram(readFile(*filenameFlag))
 
 	run(func(renderer *sdl.Renderer) {
 		cpu.NextCycle() // advance the active program by 1 cycle
@@ -53,14 +52,14 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 	// create the main window
 	window, err := sdl.CreateWindow("chip8emu", 100, 100, *widthFlag, *heightFlag, sdl.WINDOW_SHOWN)
 	if err != nil {
-		panic("Failed to create main window")
+		log.Fatal("Failed to create main window", err)
 	}
 	defer window.Destroy()
 
 	// create the main renderer
 	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
-		panic("Failed to create main renderer")
+		log.Fatal("Failed to create main renderer", err)
 	}
 	defer renderer.Destroy()
 
@@ -86,18 +85,11 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 }
 
 // Reads all of the bytes from the given file
-func read(filename string) []byte {
-	file, err := os.Open(filename)
-
+func readFile(filename string) []byte {
+	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
-		panic("Failed to open file: " + filename + " for reading")
+		log.Fatal("An error occurred whilst reading file ", filename, err)
 	}
-
-	bytes, err := ioutil.ReadAll(file)
-	if err != nil {
-		panic("An error occurred whilst reading bytes from file " + filename)
-	}
-
 	return bytes
 }
 
