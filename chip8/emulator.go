@@ -106,14 +106,6 @@ func (cpu *CPU) NextCycle() {
 func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
-	case 0x0000:
-		// 0x0nnn - SYS addr
-		// Jump to a machine code routine at nnn.
-		//
-		// This instruction is only used on the old computers on which Chip-8 was originally
-		// implemented. It is ignored by modern interpreters.
-		break
-
 	case 0x00EE:
 		// 0x00EE - RET
 		// Return from a subroutine.
