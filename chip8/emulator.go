@@ -3,56 +3,57 @@
 package chip8
 
 import (
+	"log"
 	"math/rand"
 	"time"
 )
 
 const (
-	Width  = 64 // Display width
-	Height = 32 // Display height
+	Width  = 64 // Display width, in pixels
+	Height = 32 // Display height, in pixels
 )
 
 // The central processing unit of the chip 8 system
+// Memory is laid-out in the following structure:
+// +---------------+= 0xFFF (4095) End of Chip-8 RAM
+// |               |
+// |               |
+// |               |
+// |               |
+// |               |
+// | 0x200 to 0xFFF|
+// |     Chip-8    |
+// | Program / Data|
+// |     Space     |
+// |               |
+// |               |
+// |               |
+// +- - - - - - - -+= 0x600 (1536) Start of ETI 660 Chip-8 programs
+// |               |
+// |               |
+// |               |
+// +---------------+= 0x200 (512) Start of most Chip-8 programs
+// | 0x000 to 0x1FF|
+// | Reserved for  |
+// |  interpreter  |
+// +---------------+= 0x000 (0) Start of Chip-8 RAM
 type CPU struct {
-	Memory [4096]byte // The Chip 8 has fixed 4K memory in total
-	// +---------------+= 0xFFF (4095) End of Chip-8 RAM
-	// |               |
-	// |               |
-	// |               |
-	// |               |
-	// |               |
-	// | 0x200 to 0xFFF|
-	// |     Chip-8    |
-	// | Program / Data|
-	// |     Space     |
-	// |               |
-	// |               |
-	// |               |
-	// +- - - - - - - -+= 0x600 (1536) Start of ETI 660 Chip-8 programs
-	// |               |
-	// |               |
-	// |               |
-	// +---------------+= 0x200 (512) Start of most Chip-8 programs
-	// | 0x000 to 0x1FF|
-	// | Reserved for  |
-	// |  interpreter  |
-	// +---------------+= 0x000 (0) Start of Chip-8 RAM
-
-	V     [16]byte   // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag
-	Stack [16]uint16 // The currently executing instruction; references the program counter
-	I     uint16     // An index register, I
-	PC    uint16     // A program counter PC which can have values from 0x000 to 0xFFF
-	SP    byte       // The stack pointer
-
+	Memory   [4096]byte               // The Chip 8 has fixed 4K memory in total
+	V        [16]byte                 // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag
+	Stack    [16]uint16               // The currently executing instruction; references the program counter
+	I        uint16                   // An index register, I
+	PC       uint16                   // A program counter PC which can have values from 0x000 to 0xFFF
+	SP       byte                     // The stack pointer
+	DT, ST   byte                     // When above zero, they count down to zero. Counting occurs at 60hz
 	Keypad   [16]byte                 // 16-key hexadecimal keypad
-	Bitmap   [Width * Height / 8]byte // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
-	Font     [16 * 5]byte             // The font pixels
+	Pixels   [Width * Height / 8]byte // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
 	DrawFlag bool                     // True whether the display has been updated this cycle
-
-	DelayTimer, SoundTimer byte // When above zero, they count down to zero. Counting occurs at 60hz
 }
 
 // The default font-set for the chip 8 system
+//
+// Each entry represents a small quad that renders a particular character
+// Each character is 4 pixels wide by 5 pixels high
 var fontSet = []byte{
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
 	0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -72,7 +73,7 @@ var fontSet = []byte{
 	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
-// Initializes the CPU
+// Initializes a new CPU
 func NewCPU() *CPU {
 	cpu := new(CPU)
 
@@ -87,14 +88,14 @@ func NewCPU() *CPU {
 	return cpu
 }
 
-// Loads a program into the system
+// Loads a program into the CPU
 func (cpu *CPU) LoadProgram(program []byte) {
 	for i := 0; i < len(program); i++ {
 		cpu.Memory[i+0x200] = program[i] // programs are expected to start at 0x200
 	}
 }
 
-// Advances the system a single cycle
+// Advances the CPU a single cycle
 func (cpu *CPU) NextCycle() {
 	// fetch the next instruction based on the program counter
 	opcode := uint16(cpu.Memory[cpu.PC])<<8 | uint16(cpu.Memory[cpu.PC+1])
@@ -108,38 +109,51 @@ func (cpu *CPU) NextCycle() {
 	kk := byte(opcode)
 	nnn := opcode & 0xFFF
 
-	// commonly accessed registers
+	// pointers for commonly accessed registers
 	Vx := &cpu.V[x]
 	Vy := &cpu.V[y]
 	VF := &cpu.V[0xF]
 
 	// advance timers by a single cycle
 	advanceTimers := func() {
-		if cpu.DelayTimer > 0 {
-			cpu.DelayTimer -= 1
+		if cpu.DT > 0 {
+			cpu.DT -= 1
 		}
-		if cpu.SoundTimer > 0 {
-			if cpu.SoundTimer == 1 {
+		if cpu.ST > 0 {
+			if cpu.ST == 1 {
 				println("BEEP")
 			}
-			cpu.SoundTimer -= 1
+			cpu.ST -= 1
 		}
 	}
 	defer advanceTimers()
+
+	// generates a random byte
+	randomByte := func() byte {
+		source := rand.NewSource(time.Now().UnixNano())
+		rng := rand.New(source)
+		value := rng.Intn(255)
+
+		return byte(value)
+	}
 
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
 	case 0x0000:
 		switch opcode {
 		case 0x00E0: // CLS
-			panic("TODO")
+			for y := 0; y < Height-1; y++ {
+				for x := 0; x < Width-1; x++ {
+					cpu.Pixels[y*Width+x] = 0
+				}
+			}
 
 		case 0x00EE: // RET
 			cpu.PC = cpu.Stack[cpu.SP]
 			cpu.SP -= 1
 
-		default:
-			println("Unknown opcode:", opcode)
+		case 0x0000: // SYS addr
+			break      // no-op
 		}
 
 	case 0x1000: // JP addr
@@ -221,7 +235,7 @@ func (cpu *CPU) NextCycle() {
 		cpu.PC = nnn + uint16(cpu.V[0])
 
 	case 0xC000: // RND Vx, byte
-		*Vx = kk + byte(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(255))
+		*Vx = kk + randomByte()
 
 	case 0xD000: // DRW Vx, Vy, nibble
 		panic("TODO")
@@ -232,6 +246,6 @@ func (cpu *CPU) NextCycle() {
 		cpu.Memory[cpu.I+2] = (cpu.V[*Vx] % 100) % 10
 
 	default:
-		println("Unknown opcode:", opcode)
+		log.Fatal("Unknown opcode: ", opcode)
 	}
 }

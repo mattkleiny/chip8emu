@@ -25,10 +25,12 @@ func main() {
 
 	run(func(renderer *sdl.Renderer) {
 		cpu.NextCycle() // advance the active program by 1 cycle
+
 		if cpu.DrawFlag { // render the chip8 display, if it's been updated
 			// clear the surface
 			renderer.SetDrawColor(0, 0, 0, 0)
 			renderer.Clear()
+
 			// render each pixel in the pixel buffer
 			// TODO: consider using a bitmap or surface here, instead?
 			renderer.SetDrawColor(255, 255, 255, 255)
@@ -37,7 +39,8 @@ func main() {
 					// TODO: draw a pixel
 				}
 			}
-			// present the surface
+
+			// present the display
 			renderer.Present()
 		}
 	})
@@ -48,7 +51,7 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 	sdl.Init(sdl.INIT_VIDEO)
 
 	// create the main window
-	window, err := sdl.CreateWindow("chip8emu", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, *widthFlag, *heightFlag, sdl.WINDOW_SHOWN)
+	window, err := sdl.CreateWindow("chip8emu", 100, 100, *widthFlag, *heightFlag, sdl.WINDOW_SHOWN)
 	if err != nil {
 		log.Fatal("Failed to create main window. ", err)
 	}
@@ -100,12 +103,10 @@ func parseCommandLine() {
 		flag.Usage()
 		log.Fatal("A valid filename was expected")
 	}
-
 	if *widthFlag == 0 {
 		flag.Usage()
 		log.Fatal("A valid width was expected")
 	}
-
 	if *heightFlag == 0 {
 		flag.Usage()
 		log.Fatal("A valid height was expected")
