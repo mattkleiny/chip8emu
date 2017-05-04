@@ -175,12 +175,16 @@ func (cpu *CPU) NextCycle() {
 		switch opcode & 0x000F {
 		case 0x0000: // LD Vx, Vy
 			*Vx = *Vy
+
 		case 0x0001: // OR Vx, Vy
 			*Vx = *Vy | *Vx
+
 		case 0x0002: // AND Vx, Vy
 			*Vx = *Vy & *Vx
+
 		case 0x0003: // XOR Vx, Vy
 			*Vx = *Vy ^ *Vx
+
 		case 0x0004: // ADD Vx, Vy
 			if *Vy > (0xFF - *Vx) {
 				*VF = 1 // carry
@@ -188,6 +192,7 @@ func (cpu *CPU) NextCycle() {
 				*VF = 0
 			}
 			*Vx += *Vy
+
 		case 0x0005: // SUB Vx, Vy
 			if *Vy > (0xFF - *Vx) {
 				*VF = 1 // carry
@@ -195,10 +200,13 @@ func (cpu *CPU) NextCycle() {
 				*VF = 0
 			}
 			*Vx -= *Vy
+
 		case 0x0006: // SHR Vx
 			panic("TODO")
+
 		case 0x0007: // SUBN Vx, Vy
 			panic("TODO")
+
 		case 0x000E: // SHL Vx
 			panic("TODO")
 		}
