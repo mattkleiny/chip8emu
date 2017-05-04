@@ -1,0 +1,7 @@
+memo = "d78fc3a19136174c3f7dcb314f25d3671afd02eff0e51ed89d72efa251b0ed96"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/veandco/go-sdl2"
+  packages = ["sdl"]
+  revision = "d781c3f473d206c13e3409f621e90a3b72a939e3"

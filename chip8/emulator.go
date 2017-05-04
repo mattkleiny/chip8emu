@@ -2,8 +2,6 @@
 // See see http://devernay.free.fr/hacks/chip8/C8TECH10.HTM for more detail.
 package chip8
 
-type Opcode uint16 // 35 possible opcodes, which are all two bytes long
-
 // The central processing unit of the chip 8 system
 type CPU struct {
 	Memory [4096]byte // The Chip 8 has fixed 4K memory in total
@@ -43,8 +41,11 @@ type CPU struct {
 	DelayTimer, SoundTimer byte // When above zero, they count down to zero. Counting occurs at 60hz
 }
 
+// 35 possible opcodes, which are all two bytes long
+type opcode uint16
+
 // The default font-set for the chip 8 system
-var FontSet = []byte{
+var fontSet = []byte{
 	0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
 	0x20, 0x60, 0x20, 0x20, 0x70, // 1
 	0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -63,14 +64,17 @@ var FontSet = []byte{
 	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
+// Programs expected to start at 0x200
+const offset = 0x200
+
 // Initializes the CPU
-func NewCpu() *CPU {
+func NewCPU() *CPU {
 	cpu := new(CPU)
-	cpu.PC = 0x200 // program counter starts at 0x200
+	cpu.PC = offset
 
 	// load the font-set
-	for i := 0; i < len(FontSet); i++ {
-		cpu.Memory[i] = FontSet[i]
+	for i := 0; i < len(fontSet); i++ {
+		cpu.Memory[i] = fontSet[i]
 	}
 
 	return cpu
@@ -79,14 +83,14 @@ func NewCpu() *CPU {
 // Loads a program into the system
 func (cpu *CPU) LoadProgram(program []byte) {
 	for i := 0; i < len(program); i++ {
-		cpu.Memory[i+0x200] = program[i] // programs are expected to start at 0x200
+		cpu.Memory[i+offset] = program[i]
 	}
 }
 
 // Advances the system a single cycle
 func (cpu *CPU) NextCycle() {
 	// fetch the next opcode based on the program counter
-	opcode := Opcode(cpu.Memory[cpu.PC]<<8 | cpu.Memory[cpu.PC+1])
+	opcode := opcode(cpu.Memory[cpu.PC]<<8 | cpu.Memory[cpu.PC+1])
 	cpu.decodeAndExecute(opcode)
 
 	// advance timers by a single cycle
@@ -103,7 +107,19 @@ func (cpu *CPU) NextCycle() {
 }
 
 // Decodes and executes the given opcode
-func (cpu *CPU) decodeAndExecute(opcode Opcode) {
+func (cpu *CPU) decodeAndExecute(opcode opcode) {
+	// extract common operands from the opcode
+	x := (opcode & 0x0F00) >> 8
+	y := (opcode & 0x00F0) >> 4
+	kk := byte(opcode&0x00FF) >> 4
+	nnn := uint16(opcode & 0x0FFF)
+
+	// dereference common registers
+	Vx := cpu.V[x]
+	Vy := cpu.V[y]
+
+	cpu.PC += 2 // automatically move to the next instruction
+
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
 	case 0x00EE:
@@ -120,7 +136,7 @@ func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 		// Jump to location nnn.
 		//
 		// The interpreter sets the program counter to nnn.
-		cpu.PC = uint16(opcode & 0x0FFF)
+		cpu.PC = nnn
 
 	case 0x2000:
 		// 0x2nnn - CALL addr
@@ -130,8 +146,7 @@ func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 		// the stack. The PC is then set to nnn.
 		cpu.Stack[cpu.SP] = cpu.PC
 		cpu.SP += 1
-
-		cpu.PC = uint16(opcode & 0x0FFF)
+		cpu.PC = nnn
 
 	case 0x3000:
 		// 0x3xkk - SE Vx, byte
@@ -139,14 +154,9 @@ func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 		//
 		// The interpreter compares register Vx to kk, and if they are equal, increments the
 		// program counter by 2.
-		x := (opcode & 0x0F00) >> 8
-		kk := byte(opcode&0x00FF) >> 4
-
 		if cpu.V[x] == kk {
 			cpu.PC += 2 // skip the next instruction
 		}
-
-		cpu.PC += 2 // otherwise just move to the next instruction
 
 	case 0x4000:
 		// 0x4xkk - SNE Vx, byte
@@ -154,40 +164,25 @@ func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 		//
 		// The interpreter compares register Vx to kk, and if they are not equal, increments
 		// the program counter by 2.
-		x := (opcode & 0x0F00) >> 8
-		kk := byte(opcode&0x00FF) >> 4
-
 		if cpu.V[x] != kk {
 			cpu.PC += 2 // skip the next instruction
 		}
-
-		cpu.PC += 2 // otherwise just move to the next instruction
 
 	case 0x5000:
 		// 0x5xy0 - SE Vx, Vy
 		// Skip next instruction if Vx = Vy.
 		//
 		// The interpreter compares register Vx to register Vy, and if they are equal, increments the program counter by 2.
-		x := (opcode & 0x0F00) >> 8
-		y := (opcode & 0x00F0) >> 4
-
 		if cpu.V[x] == cpu.V[y] {
 			cpu.PC += 2 // skip the next instruction
 		}
-
-		cpu.PC += 2
 
 	case 0x6000:
 		// 0x6xkk - LD Vx, byte
 		// Set Vx = kk.
 		//
 		// The interpreter puts the value kk into register Vx.
-		x := opcode & 0x0F00
-		kk := byte(opcode & 0x00FF)
-
 		cpu.V[x] = kk
-
-		cpu.PC += 2
 
 	case 0x0004:
 		// 0x8xy4 - ADD Vx, Vy
@@ -196,27 +191,19 @@ func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 		// The values of Vx and Vy are added together. If the result is greater than 8 bits
 		// (i.e., > 255,) VF is set to 1, otherwise 0. Only the lowest 8 bits of the result
 		// are kept, and stored in Vx.
-		x := (opcode & 0x0F00) >> 8
-		y := (opcode & 0x00F0) >> 4
-		Vx := cpu.V[x]
-		Vy := cpu.V[y]
-
 		if Vy > (0xFF - Vx) {
 			cpu.V[0xF] = 1 // carry
 		} else {
 			cpu.V[0xF] = 0
 		}
-
 		cpu.V[Vx] += cpu.V[Vy]
-		cpu.PC += 2
 
 	case 0xA000:
 		// 0xAnnn - LD I, addr
 		// Set I = nnn.
 		//
 		// The value of register I is set to nnn.
-		cpu.I = uint16(opcode & 0x0FFF)
-		cpu.PC += 2
+		cpu.I = uint16(nnn)
 
 	case 0x0033:
 		// 0xFx33 - LD B, Vx
@@ -230,8 +217,6 @@ func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 		cpu.Memory[cpu.I] = cpu.V[Vx] / 100
 		cpu.Memory[cpu.I+1] = (cpu.V[Vx] / 10) % 10
 		cpu.Memory[cpu.I+2] = (cpu.V[Vx] % 100) % 10
-
-		cpu.PC += 2
 
 	case 0xD000:
 		// 0xDxyn - DRW Vx, Vy, nibble
@@ -269,7 +254,6 @@ func (cpu *CPU) decodeAndExecute(opcode Opcode) {
 		}
 
 		cpu.DrawFlag = true
-		cpu.PC += 2
 
 	default:
 		println("Unknown opcode:", opcode)

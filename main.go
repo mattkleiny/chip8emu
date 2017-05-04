@@ -1,15 +1,15 @@
 package main
 
 import (
-	"io/ioutil"
 	"flag"
+	"io/ioutil"
 	"log"
+
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/xeusalmighty/chip8emu/chip8"
 )
 
 var (
-	// Command line flags and options
 	filenameFlag = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load in the emulator")
 	widthFlag    = flag.Int("width", 1024, "The width of the emulator window")
 	heightFlag   = flag.Int("height", 768, "The height of the emulator window")
@@ -17,10 +17,10 @@ var (
 
 // Entry point for the emulator
 func main() {
-	parseCommandLine() // parse flags
+	parseCommandLine()
 
 	// load a test program
-	cpu := chip8.NewCpu()
+	cpu := chip8.NewCPU()
 	cpu.LoadProgram(readFile(*filenameFlag))
 
 	run(func(renderer *sdl.Renderer) {
@@ -50,22 +50,23 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 	sdl.Init(sdl.INIT_VIDEO)
 
 	// create the main window
-	window, err := sdl.CreateWindow("chip8emu", 100, 100, *widthFlag, *heightFlag, sdl.WINDOW_SHOWN)
+	window, err := sdl.CreateWindow("chip8emu", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, *widthFlag, *heightFlag, sdl.WINDOW_SHOWN)
 	if err != nil {
-		log.Fatal("Failed to create main window", err)
+		log.Fatal("Failed to create main window. ", err)
 	}
 	defer window.Destroy()
 
 	// create the main renderer
 	renderer, err := sdl.CreateRenderer(window, -1, sdl.RENDERER_ACCELERATED)
 	if err != nil {
-		log.Fatal("Failed to create main renderer", err)
+		log.Fatal("Failed to create main renderer. ", err)
 	}
 	defer renderer.Destroy()
 
-	// runs the SDL event loop and calls the given callback function after event processing each cycle
+	// run the main event loop
 	running := true
-	for running == true {
+	for running {
+		// process incoming events
 		for event := sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch e := event.(type) {
 			case *sdl.QuitEvent:
@@ -88,7 +89,7 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 func readFile(filename string) []byte {
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.Fatal("An error occurred whilst reading file ", filename, err)
+		log.Fatal("An error occurred whilst reading file. ", err)
 	}
 	return bytes
 }
