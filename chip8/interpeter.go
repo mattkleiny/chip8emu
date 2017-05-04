@@ -80,7 +80,7 @@ func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collision bool) {
 
 			pixel := &bitmap[xpos+ypos*Width]
 
-			panic("TODO")
+			*pixel = 0 // TODO: actually implement me
 		}
 	}
 
@@ -137,6 +137,23 @@ func (cpu *CPU) NextCycle() {
 	// fetch the next instruction based on the program counter
 	opcode := uint16(cpu.Memory[cpu.PC])<<8 | uint16(cpu.Memory[cpu.PC+1])
 
+	// execute the instruction
+	cpu.decodeAndExecute(opcode)
+
+	// advance timers by a single cycle
+	if cpu.DT > 0 {
+		cpu.DT -= 1
+	}
+	if cpu.ST > 0 {
+		if cpu.ST == 1 {
+			println("BEEP")
+		}
+		cpu.ST -= 1
+	}
+}
+
+// Decodes and executes the given opcode.
+func (cpu *CPU) decodeAndExecute(opcode uint16) {
 	// move to the next instruction
 	cpu.PC += 2
 
@@ -151,20 +168,6 @@ func (cpu *CPU) NextCycle() {
 	Vx := &cpu.V[x]
 	Vy := &cpu.V[y]
 	VF := &cpu.V[0xF]
-
-	// advance timers by a single cycle
-	advanceTimers := func() {
-		if cpu.DT > 0 {
-			cpu.DT -= 1
-		}
-		if cpu.ST > 0 {
-			if cpu.ST == 1 {
-				println("BEEP")
-			}
-			cpu.ST -= 1
-		}
-	}
-	defer advanceTimers()
 
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
@@ -186,7 +189,7 @@ func (cpu *CPU) NextCycle() {
 		cpu.PC = nnn
 
 	case 0x2000: // CALL addr
-		cpu.Stack[cpu.SP] = cpu.PC
+		cpu.Stack[cpu.SP] = cpu.PC - 2 // account for instruction movement
 		cpu.SP += 1
 		cpu.PC = nnn
 

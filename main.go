@@ -37,7 +37,7 @@ func main() {
 }
 
 // Handles updating the window display via SDL.
-func updateDisplay(renderer sdl.Renderer) {
+func updateDisplay(renderer *sdl.Renderer) {
 	// clear the display
 	renderer.SetDrawColor(0, 0, 0, 0)
 	renderer.Clear()
