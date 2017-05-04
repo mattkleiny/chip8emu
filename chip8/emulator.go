@@ -3,7 +3,6 @@
 package chip8
 
 import (
-	"log"
 	"math/rand"
 	"time"
 )
@@ -38,16 +37,16 @@ const (
 // |  interpreter  |
 // +---------------+= 0x000 (0) Start of Chip-8 RAM
 type CPU struct {
-	Memory   [4096]byte               // The Chip 8 has fixed 4K memory in total
-	V        [16]byte                 // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag
-	Stack    [16]uint16               // The currently executing instruction; references the program counter
-	I        uint16                   // An index register, I
-	PC       uint16                   // A program counter PC which can have values from 0x000 to 0xFFF
-	SP       byte                     // The stack pointer
-	DT, ST   byte                     // When above zero, they count down to zero. Counting occurs at 60hz
-	Keypad   [16]byte                 // 16-key hexadecimal keypad
-	Pixels   [Width * Height / 8]byte // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
-	DrawFlag bool                     // True whether the display has been updated this cycle
+	Memory   [4096]byte           // The Chip 8 has fixed 4K memory in total
+	V        [16]byte             // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag
+	Stack    [16]uint16           // The currently executing instruction; references the program counter
+	I        uint16               // An index register
+	PC       uint16               // A program counter PC which can have values from 0x000 to 0xFFF
+	SP       byte                 // The stack pointer
+	DT, ST   byte                 // When above zero, they count down to zero. Counting occurs at 60hz
+	Keypad   [16]byte             // 16-key hexadecimal keypad
+	Pixels   [Width * Height]byte // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
+	DrawFlag bool                 // True whether the display has been updated this cycle
 }
 
 // The default font-set for the chip 8 system
@@ -107,6 +106,7 @@ func (cpu *CPU) NextCycle() {
 	x := (opcode & 0x0F00) >> 8
 	y := (opcode & 0x00F0) >> 4
 	kk := byte(opcode)
+	n := opcode & 0x000F
 	nnn := opcode & 0xFFF
 
 	// pointers for commonly accessed registers
@@ -137,6 +137,14 @@ func (cpu *CPU) NextCycle() {
 		return byte(value)
 	}
 
+	// clamps the given unsigned value below the given maximum
+	clamp := func(value, max uint) uint {
+		if value > max {
+			return value - max
+		}
+		return value
+	}
+
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
 	case 0x0000:
@@ -144,7 +152,7 @@ func (cpu *CPU) NextCycle() {
 		case 0x00E0: // CLS
 			for y := 0; y < Height-1; y++ {
 				for x := 0; x < Width-1; x++ {
-					cpu.Pixels[y*Width+x] = 0
+					cpu.Pixels[x+y*Width] = 0
 				}
 			}
 
@@ -153,7 +161,8 @@ func (cpu *CPU) NextCycle() {
 			cpu.SP -= 1
 
 		case 0x0000: // SYS addr
-			break      // no-op
+			// no-op
+			break
 		}
 
 	case 0x1000: // JP addr
@@ -238,7 +247,33 @@ func (cpu *CPU) NextCycle() {
 		*Vx = kk + randomByte()
 
 	case 0xD000: // DRW Vx, Vy, nibble
-		panic("TODO")
+		// sample the sprite
+		sprite := cpu.Memory[cpu.I:cpu.I+n]
+
+		for y := 0; y < len(sprite); y++ {
+			row := sprite[y]
+
+			for x := 0; x < 8; x++ {
+				xpos := clamp(uint(x)+uint(*Vx), Width)
+				ypos := clamp(uint(y)+uint(*Vy), Height)
+
+				// check to see if the pixel is already illuminated
+				i := byte(0x80 >> byte(x))
+
+				// adjust the pixel with an XOR
+				pixel := &cpu.Pixels[xpos+ypos*Width]
+
+				if *pixel != 0 {
+					*VF = 1 // carry if overwritten
+				}
+
+				if row&i == i {
+					*pixel = *pixel ^ 1
+				} else {
+					*pixel = *pixel ^ 0
+				}
+			}
+		}
 
 	case 0x0033: // LD B, Vx
 		cpu.Memory[cpu.I] = cpu.V[*Vx] / 100
@@ -246,6 +281,6 @@ func (cpu *CPU) NextCycle() {
 		cpu.Memory[cpu.I+2] = (cpu.V[*Vx] % 100) % 10
 
 	default:
-		log.Fatal("Unknown opcode: ", opcode)
+		println("Unknown opcode: ", opcode)
 	}
 }
