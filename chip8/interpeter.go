@@ -1,4 +1,4 @@
-// This package implements a simple emulator for the Chip 8 system/interpreter
+// This package implements a simple Chip 8 interpreter for the Chip 8.
 // See see http://devernay.free.fr/hacks/chip8/C8TECH10.HTM for more detail.
 package chip8
 
@@ -37,19 +37,18 @@ const (
 // |  interpreter  |
 // +---------------+= 0x000 (0) Start of Chip-8 RAM
 type CPU struct {
-	Memory   [4096]byte // The Chip 8 has fixed 4K memory in total.
-	V        [16]byte   // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag.
-	Stack    [16]uint16 // The currently executing instruction; references the program counter.
-	I        uint16     // An index register.
-	PC       uint16     // A program counter PC which can have values from 0x000 to 0xFFF.
-	SP       byte       // The stack pointer.
-	DT, ST   byte       // When above zero, they count down to zero. Counting occurs at 60hz.
-	Keypad   [16]byte   // 16-key hexadecimal keypad.
-	Pixels   Bitmap     // The pixel bitmap representing the display output.
-	DrawFlag bool       // True whether the display has been updated this cycle.
+	Memory [4096]byte // The Chip 8 has fixed 4K memory in total.
+	V      [16]byte   // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag.
+	I      uint16     // A 16-bit register.
+	PC     uint16     // A program counter PC (which can have values from 0x000 to 0xFFF).
+	SP     byte       // The stack pointer.
+	Stack  [16]uint16 // The stack of branching instructions; references the program counter.
+	DT, ST byte       // Delay/Sound timers. When above zero, they count down to zero. Counting occurs at 60hz.
+	Keypad [16]byte   // 16-key hexadecimal keypad.
+	Pixels Bitmap     // The pixel bitmap representing the display output.
 }
 
-// Represents a bitmap of pixels as used in our CHIP 8 implementation.
+// Represents a bitmap of pixels as used in our Chip 8 implementation.
 // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
 type Bitmap [Width * Height]byte
 
@@ -114,15 +113,12 @@ var fontSet = []byte{
 // Initializes a new CPU.
 func NewCPU() *CPU {
 	cpu := new(CPU)
-
 	// programs expected to start at 0x200
 	cpu.PC = 0x200
-
 	// load the font-set
 	for i := 0; i < len(fontSet); i++ {
 		cpu.Memory[i] = fontSet[i]
 	}
-
 	return cpu
 }
 
@@ -166,15 +162,6 @@ func (cpu *CPU) NextCycle() {
 		}
 	}
 	defer advanceTimers()
-
-	// generates a random byte
-	randomByte := func() byte {
-		source := rand.NewSource(time.Now().UnixNano())
-		rng := rand.New(source)
-		value := rng.Intn(255)
-
-		return byte(value)
-	}
 
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
@@ -286,4 +273,13 @@ func (cpu *CPU) NextCycle() {
 	default:
 		println("Unknown opcode: ", opcode)
 	}
+}
+
+// generates a random byte (0 to 255, inclusive).
+func randomByte() byte {
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source)
+	value := rng.Intn(255)
+
+	return byte(value)
 }

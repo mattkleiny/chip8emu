@@ -10,12 +10,12 @@ import (
 )
 
 var (
-	filenameFlag = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load in the emulator")
-	widthFlag    = flag.Int("width", 1024, "The width of the emulator window")
-	heightFlag   = flag.Int("height", 768, "The height of the emulator window")
+	filenameFlag = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load into the interpreter")
+	widthFlag    = flag.Int("width", 1024, "The width of the window")
+	heightFlag   = flag.Int("height", 768, "The height of the window")
 )
 
-// Entry point for the emulator
+// Entry point for the interpreter
 func main() {
 	parseCommandLine()
 
@@ -26,23 +26,24 @@ func main() {
 	run(func(renderer *sdl.Renderer) {
 		cpu.NextCycle() // advance the active program by 1 cycle
 
-		if cpu.DrawFlag { // render the chip8 display, if it's been updated
-			// clear the surface
-			renderer.SetDrawColor(0, 0, 0, 0)
-			renderer.Clear()
+		// clear the surface
+		renderer.SetDrawColor(0, 0, 0, 0)
+		renderer.Clear()
 
-			// render each pixel in the pixel buffer
-			// TODO: consider using a bitmap or surface here, instead?
-			renderer.SetDrawColor(255, 255, 255, 255)
-			for x := 0; x < chip8.Width; x++ {
-				for y := 0; y < chip8.Height; y++ {
-					// TODO: draw a pixel
+		// render each pixel in the pixel buffer
+		renderer.SetDrawColor(255, 255, 255, 255)
+		for x := 0; x < chip8.Width-1; x++ {
+			for y := 0; y < chip8.Height-1; y++ {
+				// draw active pixels
+				pixel := cpu.Pixels[x+y*chip8.Height]
+				if pixel > 0 {
+					renderer.DrawPoint(x, y)
 				}
 			}
-
-			// present the display
-			renderer.Present()
 		}
+
+		// present the display
+		renderer.Present()
 	})
 }
 
