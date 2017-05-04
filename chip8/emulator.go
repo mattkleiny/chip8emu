@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	Width  = 64 // Display width, in pixels
-	Height = 32 // Display height, in pixels
+	Width  = 64 // Display width, in pixels.
+	Height = 32 // Display height, in pixels.
 )
 
 // The central processing unit of the chip 8 system
@@ -37,16 +37,55 @@ const (
 // |  interpreter  |
 // +---------------+= 0x000 (0) Start of Chip-8 RAM
 type CPU struct {
-	Memory   [4096]byte           // The Chip 8 has fixed 4K memory in total
-	V        [16]byte             // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag
-	Stack    [16]uint16           // The currently executing instruction; references the program counter
-	I        uint16               // An index register
-	PC       uint16               // A program counter PC which can have values from 0x000 to 0xFFF
-	SP       byte                 // The stack pointer
-	DT, ST   byte                 // When above zero, they count down to zero. Counting occurs at 60hz
-	Keypad   [16]byte             // 16-key hexadecimal keypad
-	Pixels   [Width * Height]byte // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
-	DrawFlag bool                 // True whether the display has been updated this cycle
+	Memory   [4096]byte // The Chip 8 has fixed 4K memory in total.
+	V        [16]byte   // 15 8-bit general purpose registers (V0, V1 through to VE). The 16th is the carry flag.
+	Stack    [16]uint16 // The currently executing instruction; references the program counter.
+	I        uint16     // An index register.
+	PC       uint16     // A program counter PC which can have values from 0x000 to 0xFFF.
+	SP       byte       // The stack pointer.
+	DT, ST   byte       // When above zero, they count down to zero. Counting occurs at 60hz.
+	Keypad   [16]byte   // 16-key hexadecimal keypad.
+	Pixels   Bitmap     // The pixel bitmap representing the display output.
+	DrawFlag bool       // True whether the display has been updated this cycle.
+}
+
+// Represents a bitmap of pixels as used in our CHIP 8 implementation.
+// 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
+type Bitmap [Width * Height]byte
+
+// Empties the bitmap's content.
+func (bitmap *Bitmap) clear() {
+	for y := 0; y < Height-1; y++ {
+		for x := 0; x < Width-1; x++ {
+			bitmap[x+y*Width] = 0
+		}
+	}
+}
+
+// Writes a sprite at the given (x, y) coordinates
+// Returns a flag indicating if an existing pixel was overwritten.
+func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collision bool) {
+	// clamps the given unsigned value below the given maximum
+	clamp := func(value, max byte) byte {
+		if value > max {
+			return value - max
+		}
+		return value
+	}
+
+	// walk over the sprite
+	for j := 0; j < len(sprite); j++ {
+		for i := 0; i < 8; i++ {
+			xpos := clamp(x+byte(i), Width)
+			ypos := clamp(y+byte(j), Height)
+
+			pixel := &bitmap[xpos+ypos*Width]
+
+			panic("TODO")
+		}
+	}
+
+	return
 }
 
 // The default font-set for the chip 8 system
@@ -72,7 +111,7 @@ var fontSet = []byte{
 	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
-// Initializes a new CPU
+// Initializes a new CPU.
 func NewCPU() *CPU {
 	cpu := new(CPU)
 
@@ -87,14 +126,14 @@ func NewCPU() *CPU {
 	return cpu
 }
 
-// Loads a program into the CPU
+// Loads a program into the CPU.
 func (cpu *CPU) LoadProgram(program []byte) {
 	for i := 0; i < len(program); i++ {
 		cpu.Memory[i+0x200] = program[i] // programs are expected to start at 0x200
 	}
 }
 
-// Advances the CPU a single cycle
+// Advances the CPU a single cycle.
 func (cpu *CPU) NextCycle() {
 	// fetch the next instruction based on the program counter
 	opcode := uint16(cpu.Memory[cpu.PC])<<8 | uint16(cpu.Memory[cpu.PC+1])
@@ -103,8 +142,8 @@ func (cpu *CPU) NextCycle() {
 	cpu.PC += 2
 
 	// extract common operands from the opcode
-	x := (opcode & 0x0F00) >> 8
-	y := (opcode & 0x00F0) >> 4
+	x := byte((opcode & 0x0F00) >> 8)
+	y := byte((opcode & 0x00F0) >> 4)
 	kk := byte(opcode)
 	n := opcode & 0x000F
 	nnn := opcode & 0xFFF
@@ -137,24 +176,12 @@ func (cpu *CPU) NextCycle() {
 		return byte(value)
 	}
 
-	// clamps the given unsigned value below the given maximum
-	clamp := func(value, max uint) uint {
-		if value > max {
-			return value - max
-		}
-		return value
-	}
-
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
 	case 0x0000:
 		switch opcode {
 		case 0x00E0: // CLS
-			for y := 0; y < Height-1; y++ {
-				for x := 0; x < Width-1; x++ {
-					cpu.Pixels[x+y*Width] = 0
-				}
-			}
+			cpu.Pixels.clear()
 
 		case 0x00EE: // RET
 			cpu.PC = cpu.Stack[cpu.SP]
@@ -247,33 +274,9 @@ func (cpu *CPU) NextCycle() {
 		*Vx = kk + randomByte()
 
 	case 0xD000: // DRW Vx, Vy, nibble
-		// sample the sprite
+		// sample the sprite and render it at the (X, Y) coordinates
 		sprite := cpu.Memory[cpu.I:cpu.I+n]
-
-		for y := 0; y < len(sprite); y++ {
-			row := sprite[y]
-
-			for x := 0; x < 8; x++ {
-				xpos := clamp(uint(x)+uint(*Vx), Width)
-				ypos := clamp(uint(y)+uint(*Vy), Height)
-
-				// check to see if the pixel is already illuminated
-				i := byte(0x80 >> byte(x))
-
-				// adjust the pixel with an XOR
-				pixel := &cpu.Pixels[xpos+ypos*Width]
-
-				if *pixel != 0 {
-					*VF = 1 // carry if overwritten
-				}
-
-				if row&i == i {
-					*pixel = *pixel ^ 1
-				} else {
-					*pixel = *pixel ^ 0
-				}
-			}
-		}
+		cpu.Pixels.writeSprite(sprite, x, y)
 
 	case 0x0033: // LD B, Vx
 		cpu.Memory[cpu.I] = cpu.V[*Vx] / 100
