@@ -2,6 +2,16 @@
 // See see http://devernay.free.fr/hacks/chip8/C8TECH10.HTM for more detail.
 package chip8
 
+import (
+	"math/rand"
+	"time"
+)
+
+const (
+	Width  = 64 // Display width
+	Height = 32 // Display height
+)
+
 // The central processing unit of the chip 8 system
 type CPU struct {
 	Memory [4096]byte // The Chip 8 has fixed 4K memory in total
@@ -32,17 +42,15 @@ type CPU struct {
 	Stack [16]uint16 // The currently executing instruction; references the program counter
 	I     uint16     // An index register, I
 	PC    uint16     // A program counter PC which can have values from 0x000 to 0xFFF
-	SP    uint16     // The stack pointer
+	SP    byte       // The stack pointer
 
-	Keypad   [16]byte      // 16-key hexadecimal keypad
-	Pixels   [64 * 32]byte // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
-	DrawFlag bool          // True whether the display has been updated this cycle
+	Keypad   [16]byte                 // 16-key hexadecimal keypad
+	Bitmap   [Width * Height / 8]byte // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
+	Font     [16 * 5]byte             // The font pixels
+	DrawFlag bool                     // True whether the display has been updated this cycle
 
 	DelayTimer, SoundTimer byte // When above zero, they count down to zero. Counting occurs at 60hz
 }
-
-// 35 possible opcodes, which are all two bytes long
-type opcode uint16
 
 // The default font-set for the chip 8 system
 var fontSet = []byte{
@@ -64,13 +72,12 @@ var fontSet = []byte{
 	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
-// Programs expected to start at 0x200
-const offset = 0x200
-
 // Initializes the CPU
 func NewCPU() *CPU {
 	cpu := new(CPU)
-	cpu.PC = offset
+
+	// programs expected to start at 0x200
+	cpu.PC = 0x200
 
 	// load the font-set
 	for i := 0; i < len(fontSet); i++ {
@@ -83,177 +90,138 @@ func NewCPU() *CPU {
 // Loads a program into the system
 func (cpu *CPU) LoadProgram(program []byte) {
 	for i := 0; i < len(program); i++ {
-		cpu.Memory[i+offset] = program[i]
+		cpu.Memory[i+0x200] = program[i] // programs are expected to start at 0x200
 	}
 }
 
 // Advances the system a single cycle
 func (cpu *CPU) NextCycle() {
-	// fetch the next opcode based on the program counter
-	opcode := opcode(cpu.Memory[cpu.PC]<<8 | cpu.Memory[cpu.PC+1])
-	cpu.decodeAndExecute(opcode)
+	// fetch the next instruction based on the program counter
+	opcode := uint16(cpu.Memory[cpu.PC])<<8 | uint16(cpu.Memory[cpu.PC+1])
 
-	// advance timers by a single cycle
-	if cpu.DelayTimer > 0 {
-		cpu.DelayTimer -= 1
-	}
+	// move to the next instruction
+	cpu.PC += 2
 
-	if cpu.SoundTimer > 0 {
-		if cpu.SoundTimer == 1 {
-			println("BEEP")
-		}
-		cpu.SoundTimer -= 1
-	}
-}
-
-// Decodes and executes the given opcode
-func (cpu *CPU) decodeAndExecute(opcode opcode) {
 	// extract common operands from the opcode
 	x := (opcode & 0x0F00) >> 8
 	y := (opcode & 0x00F0) >> 4
-	kk := byte(opcode&0x00FF) >> 4
-	nnn := uint16(opcode & 0x0FFF)
+	kk := byte(opcode)
+	nnn := opcode & 0xFFF
 
-	// dereference common registers
-	Vx := cpu.V[x]
-	Vy := cpu.V[y]
+	// commonly accessed registers
+	Vx := &cpu.V[x]
+	Vy := &cpu.V[y]
+	VF := &cpu.V[0xF]
 
-	cpu.PC += 2 // automatically move to the next instruction
+	// advance timers by a single cycle
+	advanceTimers := func() {
+		if cpu.DelayTimer > 0 {
+			cpu.DelayTimer -= 1
+		}
+		if cpu.SoundTimer > 0 {
+			if cpu.SoundTimer == 1 {
+				println("BEEP")
+			}
+			cpu.SoundTimer -= 1
+		}
+	}
+	defer advanceTimers()
 
 	// decode and execute the opcode
 	switch opcode & 0xF000 {
-	case 0x00EE:
-		// 0x00EE - RET
-		// Return from a subroutine.
-		//
-		// The interpreter sets the program counter to the address at the top of the stack, then
-		// subtracts 1 from the stack pointer.
-		cpu.PC = cpu.Stack[cpu.SP]
-		cpu.SP -= 1
+	case 0x0000:
+		switch opcode {
+		case 0x00E0: // CLS
+			panic("TODO")
 
-	case 0x1000:
-		// 1nnn - JP addr
-		// Jump to location nnn.
-		//
-		// The interpreter sets the program counter to nnn.
+		case 0x00EE: // RET
+			cpu.PC = cpu.Stack[cpu.SP]
+			cpu.SP -= 1
+
+		default:
+			println("Unknown opcode:", opcode)
+		}
+
+	case 0x1000: // JP addr
 		cpu.PC = nnn
 
-	case 0x2000:
-		// 0x2nnn - CALL addr
-		// Call subroutine at nnn.
-		//
-		// The interpreter increments the stack pointer, then puts the current PC on the top of
-		// the stack. The PC is then set to nnn.
+	case 0x2000: // CALL addr
 		cpu.Stack[cpu.SP] = cpu.PC
 		cpu.SP += 1
 		cpu.PC = nnn
 
-	case 0x3000:
-		// 0x3xkk - SE Vx, byte
-		// Skip next instruction if Vx = kk.
-		//
-		// The interpreter compares register Vx to kk, and if they are equal, increments the
-		// program counter by 2.
-		if cpu.V[x] == kk {
+	case 0x3000: // SE Vx, byte
+		if *Vx == kk {
 			cpu.PC += 2 // skip the next instruction
 		}
 
-	case 0x4000:
-		// 0x4xkk - SNE Vx, byte
-		// Skip next instruction if Vx != kk.
-		//
-		// The interpreter compares register Vx to kk, and if they are not equal, increments
-		// the program counter by 2.
-		if cpu.V[x] != kk {
+	case 0x4000: // SNE Vx, byte
+		if *Vx != kk {
 			cpu.PC += 2 // skip the next instruction
 		}
 
-	case 0x5000:
-		// 0x5xy0 - SE Vx, Vy
-		// Skip next instruction if Vx = Vy.
-		//
-		// The interpreter compares register Vx to register Vy, and if they are equal, increments the program counter by 2.
-		if cpu.V[x] == cpu.V[y] {
+	case 0x5000: // SE Vx, Vy
+		if *Vx == *Vy {
 			cpu.PC += 2 // skip the next instruction
 		}
 
-	case 0x6000:
-		// 0x6xkk - LD Vx, byte
-		// Set Vx = kk.
-		//
-		// The interpreter puts the value kk into register Vx.
-		cpu.V[x] = kk
+	case 0x6000: // LD Vx, byte
+		*Vx = kk
 
-	case 0x0004:
-		// 0x8xy4 - ADD Vx, Vy
-		// Set Vx = Vx + Vy, set VF = carry.
-		//
-		// The values of Vx and Vy are added together. If the result is greater than 8 bits
-		// (i.e., > 255,) VF is set to 1, otherwise 0. Only the lowest 8 bits of the result
-		// are kept, and stored in Vx.
-		if Vy > (0xFF - Vx) {
-			cpu.V[0xF] = 1 // carry
-		} else {
-			cpu.V[0xF] = 0
-		}
-		cpu.V[Vx] += cpu.V[Vy]
+	case 0x7000: // ADD Vx, byte
+		*Vx += kk
 
-	case 0xA000:
-		// 0xAnnn - LD I, addr
-		// Set I = nnn.
-		//
-		// The value of register I is set to nnn.
-		cpu.I = uint16(nnn)
-
-	case 0x0033:
-		// 0xFx33 - LD B, Vx
-		// Store BCD representation of Vx in memory locations I, I+1, and I+2.
-		//
-		// The interpreter takes the decimal value of Vx, and places the hundreds digit in memory
-		// at location in I, the tens digit at location I+1, and the ones digit at location I+2.
-		x := (opcode & 0x0F00) >> 8
-		Vx := cpu.V[x]
-
-		cpu.Memory[cpu.I] = cpu.V[Vx] / 100
-		cpu.Memory[cpu.I+1] = (cpu.V[Vx] / 10) % 10
-		cpu.Memory[cpu.I+2] = (cpu.V[Vx] % 100) % 10
-
-	case 0xD000:
-		// 0xDxyn - DRW Vx, Vy, nibble
-		// Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
-		//
-		// The interpreter reads n bytes from memory, starting at the address stored in I.
-		// These bytes are then displayed as sprites on screen at coordinates (Vx, Vy).
-		//
-		// Sprites are XORed onto the existing screen. If this causes any pixels to be erased,
-		// VF is set to 1, otherwise it is set to 0. If the sprite is positioned so part of it
-		// is outside the coordinates of the display, it wraps around to the opposite side of
-		// the screen.
-		Vx := uint16(cpu.V[(opcode&0x0F00)>>8])
-		Vy := uint16(cpu.V[(opcode&0x00F0)>>4])
-		height := uint16(opcode & 0x000F)
-
-		const ScanWidth = 8
-		const ScanHeight = 64
-
-		// scan the existing display in lines
-		for yline := uint16(0); yline < height; yline++ {
-			pixel := cpu.Memory[cpu.I+yline]
-			for xline := uint16(0); xline < ScanWidth; xline++ {
-				// check to see if a pixel is present in the given line
-				if (pixel & (0x80 >> xline)) != 0 {
-					index := Vx + xline + ((Vy + yline) * ScanHeight)
-
-					if cpu.Pixels[index] == 1 {
-						cpu.V[0xF] = 1
-					}
-
-					cpu.Pixels[index] ^= 1
-				}
+	case 0x8000:
+		switch opcode & 0x000F {
+		case 0x0000: // LD Vx, Vy
+			*Vx = *Vy
+		case 0x0001: // OR Vx, Vy
+			*Vx = *Vy | *Vx
+		case 0x0002: // AND Vx, Vy
+			*Vx = *Vy & *Vx
+		case 0x0003: // XOR Vx, Vy
+			*Vx = *Vy ^ *Vx
+		case 0x0004: // ADD Vx, Vy
+			if *Vy > (0xFF - *Vx) {
+				*VF = 1 // carry
+			} else {
+				*VF = 0
 			}
+			*Vx += *Vy
+		case 0x0005: // SUB Vx, Vy
+			if *Vy > (0xFF - *Vx) {
+				*VF = 1 // carry
+			} else {
+				*VF = 0
+			}
+			*Vx -= *Vy
+		case 0x0006: // SHR Vx
+			panic("TODO")
+		case 0x0007: // SUBN Vx, Vy
+			panic("TODO")
+		case 0x000E: // SHL Vx
+			panic("TODO")
 		}
 
-		cpu.DrawFlag = true
+	case 0x9000: // SNE Vx, Vy
+		panic("TODO")
+
+	case 0xA000: // LD I, addr
+		cpu.I = nnn
+
+	case 0xB000: // JP V0, addr
+		cpu.PC = nnn + uint16(cpu.V[0])
+
+	case 0xC000: // RND Vx, byte
+		*Vx = kk + byte(rand.New(rand.NewSource(time.Now().UnixNano())).Intn(255))
+
+	case 0xD000: // DRW Vx, Vy, nibble
+		panic("TODO")
+
+	case 0x0033: // LD B, Vx
+		cpu.Memory[cpu.I] = cpu.V[*Vx] / 100
+		cpu.Memory[cpu.I+1] = (cpu.V[*Vx] / 10) % 10
+		cpu.Memory[cpu.I+2] = (cpu.V[*Vx] % 100) % 10
 
 	default:
 		println("Unknown opcode:", opcode)

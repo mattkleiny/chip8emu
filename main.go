@@ -32,11 +32,9 @@ func main() {
 			// render each pixel in the pixel buffer
 			// TODO: consider using a bitmap or surface here, instead?
 			renderer.SetDrawColor(255, 255, 255, 255)
-			for x := 0; x < 64; x++ {
-				for y := 0; y < 32; y++ {
-					if cpu.Pixels[x*y] > 0 {
-						renderer.DrawPoint(x, y)
-					}
+			for x := 0; x < chip8.Width; x++ {
+				for y := 0; y < chip8.Height; y++ {
+					// TODO: draw a pixel
 				}
 			}
 			// present the surface
