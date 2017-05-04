@@ -15,36 +15,52 @@ var (
 	heightFlag   = flag.Int("height", 768, "The height of the window")
 )
 
+// the chip 8 cpu
+var cpu = chip8.NewCPU()
+
+// a map of runes to their associated byte in the chip 8 keypad
+var keymap = map[rune]*byte{}
+
 // Entry point for the interpreter
 func main() {
 	parseCommandLine()
 
 	// load a test program
-	cpu := chip8.NewCPU()
 	cpu.LoadProgram(readFile(*filenameFlag))
 
+	// run the main event loop
 	run(func(renderer *sdl.Renderer) {
-		cpu.NextCycle() // advance the active program by 1 cycle
+		cpu.NextCycle()         // advance the active program by 1 cycle
+		updateDisplay(renderer) // handle graphics
+		updateKeypad()          // handle input
+	})
+}
 
-		// clear the surface
-		renderer.SetDrawColor(0, 0, 0, 0)
-		renderer.Clear()
+// Handles updating the window display via SDL.
+func updateDisplay(renderer sdl.Renderer) {
+	// clear the display
+	renderer.SetDrawColor(0, 0, 0, 0)
+	renderer.Clear()
 
-		// render each pixel in the pixel buffer
-		renderer.SetDrawColor(255, 255, 255, 255)
-		for x := 0; x < chip8.Width-1; x++ {
-			for y := 0; y < chip8.Height-1; y++ {
-				// draw active pixels
-				pixel := cpu.Pixels[x+y*chip8.Height]
-				if pixel > 0 {
-					renderer.DrawPoint(x, y)
-				}
+	// render each pixel in the bitmap
+	renderer.SetDrawColor(255, 255, 255, 255)
+	for x := 0; x < chip8.Width-1; x++ {
+		for y := 0; y < chip8.Height-1; y++ {
+			// draw active pixels
+			pixel := cpu.Pixels[x+y*chip8.Height]
+			if pixel > 0 {
+				renderer.DrawPoint(x, y)
 			}
 		}
+	}
 
-		// present the display
-		renderer.Present()
-	})
+	// present the display
+	renderer.Present()
+}
+
+// Handles input translation to the chip 8 keypad.
+func updateKeypad() {
+	// TODO: handle keyboard input
 }
 
 // Bootstraps and executes the application via SDL

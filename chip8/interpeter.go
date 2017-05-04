@@ -110,11 +110,14 @@ var fontSet = []byte{
 	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
+// Programs are expected to start at 0x200.
+const startOffset = 0x200
+
 // Initializes a new CPU.
 func NewCPU() *CPU {
 	cpu := new(CPU)
 	// programs expected to start at 0x200
-	cpu.PC = 0x200
+	cpu.PC = startOffset
 	// load the font-set
 	for i := 0; i < len(fontSet); i++ {
 		cpu.Memory[i] = fontSet[i]
@@ -122,10 +125,10 @@ func NewCPU() *CPU {
 	return cpu
 }
 
-// Loads a program into the CPU.
+// Loads a program into the CPU from the given byte slice.
 func (cpu *CPU) LoadProgram(program []byte) {
 	for i := 0; i < len(program); i++ {
-		cpu.Memory[i+0x200] = program[i] // programs are expected to start at 0x200
+		cpu.Memory[i+startOffset] = program[i]
 	}
 }
 
