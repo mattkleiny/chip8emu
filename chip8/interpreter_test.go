@@ -87,7 +87,7 @@ var OpcodeScenarios = map[string]OpcodeScenario{
 			nil,
 			func(t *testing.T, cpu *CPU) {
 				assertEquals(t, "SP", cpu.SP, 0x1)
-				assertEquals(t, "Stack[1]", cpu.Stack[1], 0x200)
+				assertEquals(t, "Stack[1]", cpu.Stack[1], 0x202)
 				assertEquals(t, "PC", cpu.PC, 0x100)
 			},
 		},
@@ -338,6 +338,27 @@ var OpcodeScenarios = map[string]OpcodeScenario{
 			},
 			func(t *testing.T, cpu *CPU) {
 				assertEquals(t, "V1", cpu.V[1], 0x000)
+			},
+		},
+	},
+	"0xEx9E - SKP Vx": {
+		{
+			0xE19E,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x1
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x202)
+			},
+		},
+		{
+			0xE19E,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x1
+				cpu.Keypad[0x1] = true
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x204)
 			},
 		},
 	},

@@ -65,7 +65,7 @@ type CPU struct {
 	I      uint16     // A 16-bit register.
 	PC     uint16     // A program counter PC (which can have values from 0x000 to 0xFFF).
 	SP     byte       // The stack pointer.
-	Stack  [16]uint16 // The stack of branching instructions; references the program counter.
+	Stack  [12]uint16 // The stack of branching instructions; references the program counter.
 	DT, ST byte       // Delay/Sound timers. When above zero, they count down to zero. Counting occurs at 60hz.
 	Keypad [16]bool   // 16-key hexadecimal keypad. Boolean flag indicates if key is pressed or not.
 	Pixels Bitmap     // The pixel bitmap representing the display output.
@@ -218,8 +218,8 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 	// extract common operands from the opcode
 	x := byte((opcode & 0x0F00) >> 8)
 	y := byte((opcode & 0x00F0) >> 4)
+	n := byte(opcode & 0x000F)
 	kk := byte(opcode)
-	n := opcode & 0x000F
 	nnn := opcode & 0x0FFF
 
 	// pointers for commonly accessed registers
@@ -235,7 +235,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 			cpu.Pixels.clear()
 
 		case 0x00EE: // RET
-			cpu.PC = cpu.Stack[cpu.SP]
+			cpu.PC = cpu.Stack[cpu.SP%12]
 			cpu.SP -= 1
 
 		case 0x0000: // SYS addr
@@ -248,7 +248,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 
 	case 0x2000: // CALL addr
 		cpu.SP += 1
-		cpu.Stack[cpu.SP] = cpu.PC - 2
+		cpu.Stack[cpu.SP%12] = cpu.PC
 		cpu.PC = nnn
 
 	case 0x3000: // SE Vx, byte
@@ -308,7 +308,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 			} else {
 				*VF = 0
 			}
-			*Vx /= 2
+			*Vx = *Vx >> 1
 
 		case 0x0007: // SUBN Vx, Vy
 			if *Vy > *Vx {
@@ -322,7 +322,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 			} else {
 				*VF = 0
 			}
-			*Vx *= 2
+			*Vx = *Vx << 1
 		}
 
 	case 0x9000: // SNE Vx, Vy
@@ -337,20 +337,28 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		cpu.PC = nnn + uint16(cpu.V[0])
 
 	case 0xC000: // RND Vx, byte
-		*Vx = kk & randomByte()
+		*Vx = randomByte() & kk
 
 	case 0xD000: // DRW Vx, Vy, nibble
 		// sample the sprite and render it at the (X, Y) coordinates
-		sprite := cpu.Memory[cpu.I:cpu.I+n]
+		sprite := cpu.Memory[cpu.I:cpu.I+uint16(n)]
 		if cpu.Pixels.writeSprite(sprite, x, y) {
 			*VF = 1
 		} else {
 			*VF = 0
 		}
 
-	case 0xE000: // SKNP Vx
-		if !cpu.Keypad[*Vx] {
-			cpu.PC += 2
+	case 0xE000:
+		switch opcode & 0x00FF {
+		case 0x009E: // SKP VX
+			if cpu.Keypad[*Vx&15] {
+				cpu.PC += 2
+			}
+
+		case 0x00A1: // SKNP VX
+			if !cpu.Keypad[*Vx&15] {
+				cpu.PC += 2
+			}
 		}
 
 	case 0xF000:
@@ -367,7 +375,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		case 0x0018: // LD ST, Vx
 			cpu.ST = *Vx
 
-		case 0x001E:
+		case 0x001E: // ADD I, Vx
 			cpu.I = cpu.I + uint16(*Vx)
 
 		case 0x0029: // LD F, Vx
