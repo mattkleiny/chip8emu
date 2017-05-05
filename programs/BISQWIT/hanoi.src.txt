@@ -1,0 +1,1365 @@
+; Screen size: 64x32
+; Peg width:   4 pixels
+; Minimum disk width:  8 pixels
+; Maximum disk width: 20 pixels
+; Maximum number of disks: 6
+peg_width      = 2
+game_room      = 32-7
+peg_base_width = 20
+min_disk_width = 6
+max_disk_width = 20
+max_num_disks  = 6
+
+peg1_center_x = 21 - max_disk_width/2
+peg2_center_x = 42 - max_disk_width/2
+peg3_center_x = 63 - max_disk_width/2 
+
+start:
+	jp start1
+	.byte "HANOI by J. Yliluoma",0
+disk_pat        = start
+	; 23 bytes total
+reboot:
+	ld v0, 20
+	ld st, v0
+	; jp start1
+start1:
+	call title_screen
+	call setup_screen
+	call initialize_game
+	call render_game
+	call drop_disks
+	call run_game
+
+	exit
+@end:	jp @end
+
+
+title_screen:
+	cls
+	ld v8, SHR(title_str, 8)
+	ld v9, AND(title_str, 255)
+	ld v6, 0
+	ld v7, 0
+	call render_text
+	ld v8, SHR(key_str, 8)
+	ld v9, AND(key_str, 255)
+	ld v6, 3
+	ld v7, 32-5
+	call render_text
+	call title_draw_pegs
+	;jp title_draw_disks
+title_draw_disks:
+	ld v6, peg2_center_x
+	ld v4, 6
+	ld v5, 4
+	ld v7, 24-3
+	ld v8, 4
+	call draw_disk_center
+
+	ld v4, 20
+	ld v5, 4
+	ld v6, peg1_center_x
+	ld v7, 24-3
+	ld v8, 4
+	call draw_disk_center
+
+	ld v4, 14
+	ld v7, 24-3-4
+	ld v8, 4
+	call draw_disk_center
+
+	ld v7, 24-3-4-4
+	ld v4, 10
+	ld v8, 4
+	call draw_disk_center
+	
+@loop:
+	call check_anykey
+	if vf<>0: ret 
+
+	rnd vf, 7
+	ld i, rnd_offset
+	add i, vf
+	ld v0, [i]
+	if v0 = 0: jp @wait_frame
+	add v0, v7 ; Candidate new v7
+
+	; if v0 <  6, jp @wait_frame
+	; if v0 > 13, jp @wait_frame
+	ld v1, 6
+	subn v1, v0 ; v1 = v0-6
+	if vf=0 : jp @wait_frame
+	ld v1, 13
+	sub v1, v0  ; v1 = 13-v0
+	if vf=0 : jp @wait_frame
+
+	ld vb, v0 ; backup the candidate new v7
+	ld v4, 10
+	call draw_disk_center
+
+	ld v7, vb
+	ld v4, 10
+	; v8 = max(128, v7+128-9)+v5-128
+	ld v8, v7
+	add v8, 128-9
+	ld v1, 128
+	ld v0, v8
+	and v0, v1
+	if v0<>0: ld v8, 128
+	add v8, -128
+	add v8, v5
+	call draw_disk_center
+@wait_frame:
+	ld v0, 1: call frame_delay
+	jp @loop
+
+
+title_draw_pegs:
+	ld v3,  9
+	ld v5, 16
+	;
+	ld v6, peg1_center_x - peg_width/2
+	ld v4, peg1_center_x - max_disk_width/2
+	call draw_peg
+	ld v6, peg2_center_x - peg_width/2
+	ld v4, peg2_center_x - max_disk_width/2
+	call draw_peg
+	ld v6, peg3_center_x - peg_width/2
+	ld v4, peg3_center_x - max_disk_width/2
+	call draw_peg
+	ret
+
+
+setup_screen:
+	cls
+	ld v8, SHR(setup_str, 8)
+	ld v9, AND(setup_str, 255)
+	ld v6, 4
+	ld v7, 0
+	ld vb, 0
+	ld dt, v7
+	call render_text
+	ld v8, SHR(created_str, 8)
+	ld v9, AND(created_str, 255)
+	ld v6, 4
+	ld v7, 20
+	call render_text
+@flush:	call check_anykey
+	if vf!=0: jp @flush
+	
+	ld vd, 16 ; Current input option
+
+@loop:	call @cursor
+	call @check_acceptable
+	if v0=1 : jp @accepted ; Ignore keys if we got acceptable input
+	call check_anykey
+	if vf=0: jp @loop
+	if v0=vd: jp @loop ; Ignore duplicate input
+	ld vc, v0
+	call @draw_input
+	ld vd, vc
+	call @draw_input
+	call @check_acceptable
+	if v0=0: jp @loop
+	ld v0, 20
+	ld st, v0 ; Beep to sound acceptable input
+	ld vb, 0  ; Restart the reboot timer
+	jp @loop
+	ret
+@accepted:
+	if vb != -4 : jp @loop
+	ld v0, vd ; Return value in v0
+	ld [num_disks], v0
+	ret
+@cursor:
+	ld v0, dt : if v0 <> 0 : ret
+	ld v0, 8 : ld dt, v0
+	ld i, bit_patterns_right+4
+	ld v6, 50
+	ld v7, 17
+	drw v6,v7,1
+	add vb, -1
+	if vb = 0 : jp reboot
+	ret
+@draw_input:
+	ld v0, 2
+	ld st, v0
+	ld v1, 0
+	ld i, hex_tab
+	add i, vd
+	ld v0, [i]
+	ld i, disk_pat
+	ld [i], v1
+	ld v6, 54
+	ld v7, 12
+	ld v8, SHR(disk_pat, 8)
+	ld v9, AND(disk_pat, 255)
+	call render_text
+	ret
+@check_acceptable:
+	ld i, acceptable_setups
+	add i, vd
+	ld v0, [i]
+	ret
+
+
+ending_screen:
+	cls
+	ld va, 0
+	ld v9, 0
+	call make_dithpat
+    @clearloop:
+	call clear_with_dithpat
+	add v9, 1
+	call make_dithpat
+	ld v0, 3 : call frame_delay
+	if v9 != 18 : jp @clearloop
+	cls
+	ld v8, SHR(winner_str,8) : ld v9, AND(winner_str,255)
+	ld v6, 0 : ld v7, 0
+	call render_text
+	ld v8, SHR(moves_str, 8)
+	ld v9, AND(moves_str, 255)
+	ld v6, 0
+	ld v7, 13
+	call render_text
+	ld v7, 13
+	call print_moves
+	ld v8, SHR(created_str,8) : ld v9, AND(created_str,255)
+	ld v6, 0 : ld v7, 20
+	call render_text
+
+    @clearloop2b:
+	call check_anykey
+	if vf=1: jp reboot
+	rnd v0, 0x7F :  call frame_delay
+	ld v9, 0
+	ld v0, 2: ld st, v0
+	call make_dithpat
+	call make_dithpat
+    @clearloop2:
+	call clear_with_dithpat
+	add v9, 1
+	call make_dithpat
+	ld v0, 3 : call frame_delay
+	if v9 != 18 : jp @clearloop2
+	jp @clearloop2b
+
+
+initialize_game:
+	ld v0, 0
+	ld [n_moves], bcd v0
+
+	ld v0, [num_disks]
+	ld v5, v0
+	ld v8, v0
+	shl v8,v8
+	shl v8,v8
+
+@loop:	if v8=0 : jp @continue
+	add v8,-4 ; disk_id*4
+	add v5,-1 ; disk_id
+
+	; disk_width = max_disk_width - (max_disk_width-min_disk_width) * disk_id / (num_disks-1)
+	ld v0, [num_disks]
+	add v0,-1
+	ld v7, v0
+	ld v0, (max_disk_width-min_disk_width)
+	ld v9, v5
+	call mul_v9
+	ld v9,v7
+	call div_v9
+	ld v0, max_disk_width
+	sub v0, v2
+
+	ld i, disk_widths
+	add i, v5
+	ld [i], v0
+
+	shr v0,v0
+	ld v3, peg1_center_x
+	sub v3, v0
+
+	ld i, disk_data
+	add i, v8
+	ld v0, 0  ; peg id
+	ld v2, -1 ; y coordinate
+	; v0 = location
+	; v1 = height
+	; v2 = ycoord
+	; v3 = xcoord
+	ld [i], v3
+	jp @loop
+
+@continue:
+	; average_disk_height = min((game_room-1) / (num_disks+1), 8)
+	ld v0, [num_disks]
+	ld v5, v0 ; number of disks remaining
+	shl v5,v5
+	shl v5,v5
+	ld v6, v0 ; divisor
+	add v6, 1
+	shl v6,v6
+	shl v6,v6
+
+	ld v7, 0  ; disk id
+	ld v8, 0  ; start y coordinate of previous disk
+
+@disk_size_loop:
+	; ycoord = (game_room-1) * (disk_id+1) / (num_disks+1)
+	ld v0, v7
+	add v0, 4
+	ld v9, game_room-1
+	call mul_v9
+	ld v9, v6
+	call div_v9
+	ld v0, v2
+	sub v0, v8
+	ld i, disk_data+1 ; disk_height
+	add i, v7
+	; if v0 > 6, then v0 = 6
+	ld v2, 6
+	sub v2, v0
+	if vf=0 : ld v0, 6
+	ld [i], v0
+
+	add v8, v0
+	add v7, 4
+	if v7 != v5: jp @disk_size_loop
+
+	ld v0, v8
+	ld v3, (game_room-10)
+	; If v0 < (game_room-10), v0 = (game_room-10)
+	ld v2, v0
+	sub v2, v3
+	if vf=0 : ld v0, v3
+	ld [peg_height], v0
+
+	; peg_y      = game_room - peg_height
+	ld v1, game_room
+	subn v0, v1
+	ld [peg_y], v0
+	
+	ld v0, game_room
+	ld i, peg_tops
+	ld [i], v0
+	ld [i], v0
+	ld [i], v0
+	ret
+
+
+render_game:
+	cls
+	ld v8, SHR(moves_str, 8)
+	ld v9, AND(moves_str, 255)
+	ld v6, 0
+	ld v7, game_room+2
+	call render_text
+	ld v7, game_room+2
+	call print_moves
+	;
+	; Render pegs
+	ld v0, [peg_y]
+	ld v3, v0
+	ld v0, [peg_height]
+	ld v5, v0
+	ld v6, peg1_center_x - peg_width/2
+	ld v4, peg1_center_x - max_disk_width/2
+	call draw_peg
+	ld v6, peg2_center_x - peg_width/2
+	ld v4, peg2_center_x - max_disk_width/2
+	call draw_peg
+	ld v6, peg3_center_x - peg_width/2
+	ld v4, peg3_center_x - max_disk_width/2
+	call draw_peg
+	
+	; Render each disk
+	ld v0, [num_disks]
+	ld v9, v0
+@disk_loop:
+	add v9, -1
+	if v9 = 0xFF: ret
+
+	call render_disk
+	jp @disk_loop
+
+
+inc_moves:
+	ld [drw_disk_backup], ve
+	ld v7, game_room+2
+	call print_moves
+	ld v1, [n_moves]
+	add v1, 1
+	if v1=0: add v0, 1
+	ld [n_moves], v1
+	ld v7, game_room+2
+	call print_moves
+	ld ve, [drw_disk_backup]
+	ret
+print_moves:
+	ld v1, [n_moves]
+	ld v9, 100
+	call div_v9
+	ld [disk_pat+2], bcd v1 ; 100,10,1
+	ld [disk_pat],   bcd v2 ; 10000,1000,100
+	ld v0, 0
+	ld [disk_pat+5], v0
+	;
+	ld v1, 0
+@loop1:	ld i, disk_pat
+	add i, v1
+	ld v0, [i]
+	if v0 != 0: jp @loop2b
+	ld v0, 128
+	ld i, disk_pat
+	add i, v1
+	ld [i], v0
+	add v1, 1
+	if v1 != 4: jp @loop1
+@loop2:	ld i, disk_pat
+	add i, v1
+	ld v0, [i]
+@loop2b:add v0, 48
+	ld i, disk_pat
+	add i, v1
+	ld [i], v0
+	add v1, 1
+	if v1 != 5: jp @loop2
+	;
+	ld v8, SHR(disk_pat, 8)
+	ld v9, AND(disk_pat, 255)
+	ld v6, 32
+	;ld v7, game_room+2
+	call render_text
+	ret
+
+render_disk:
+	; Input:
+	;     v9 = disk number
+	; Modifies:
+	;     v0-v9, vc-vf
+	; Preserves:
+	;     va,vb
+	ld v5, v9
+	shl v5, v5
+	shl v5, v5
+	ld i, disk_data
+	add i, v5
+	ld v3, [i]
+	; v0 = peg id
+	; v1 = height
+	; v2 = ycoord
+	; v3 = xcoord
+
+	; if the disk is invisible (y < 0), ignore
+	ld vf, 0
+	ld v4, 128
+	and v4, v2
+	if v4 != 0 : ret
+
+	ld v5, v1 ; height
+	ld v6, v3 ; x coordinate
+	ld v7, v2 ; y coordinate
+
+	; Based on Y coordinate in V7, disk height in V5, and peg_y,
+	; determine amount of skewerance.
+	; Disk ends at V7+V5. Skewer = V7+V5 - peg_y
+	ld v8, v7
+	add v8, v5
+	ld v0, [peg_y]
+	sub v8, v0
+	; If negative, treat as 0
+	ld v0, 128
+	and v0, v8
+	if v0 != 0: ld v8, 0
+
+	ld i, disk_widths
+	add i, v9
+	ld v0, [i]
+	ld v4, v0 ; disk width
+	call draw_disk
+	ret
+
+
+drop_disks:
+	ld va, 0
+@disk_loop:
+	ld v0, [num_disks]
+	if va = v0 : ret
+	call @drop_disk_check
+	add va, 1
+	jp @disk_loop
+
+@drop_disk:
+	; Remove disk from its present location
+	ld v0,1 : ld dt,v0 ; Init frame delay
+	ld v9, va
+	call render_disk
+
+	; Load disk width
+	ld i, disk_widths
+	add i, va
+	ld v0, [i]
+	ld v9, v0
+
+	; Increment the Y coordinate
+	ld v5, va
+	shl v5, v5
+	shl v5, v5
+	ld i, disk_data
+	add i, v5
+	ld v3, [i]
+	add v2, 1
+	
+	; Make sure the disk is centered on the peg
+	ld v8, v0
+	ld i, peg_xcoords
+	add i, v8
+	ld v0, [i]
+	shr v9, v9
+	ld v3, v0
+	sub v3, v9
+	ld v0, v8
+
+	; Save modified data
+	ld i, disk_data
+	add i, v5
+	ld [i], v3
+	
+	; Draw disk in new location
+	ld v9, va
+	call render_disk
+	call frame_delay_wait
+
+@drop_disk_check:
+	; Load the current bottom coordinate of the disk
+	ld v5, va
+	shl v5, v5
+	shl v5, v5
+	;
+	ld i, disk_data
+	add i, v5
+	ld v3, [i]
+	add v1, v2 ; v1 = ycoord+height (pixel bottom)
+	ld v9, v0
+	ld i, peg_tops
+	add i, v9
+	ld v0, [i]
+	; If v0 = v1, the disk is standing at top
+	; If v0 < v1, there's something on top of this disk
+	; If v0 > v1, drop more
+	subn v0, v1 : if vf = 0: jp @drop_disk
+	; Update the new pile top coordinate
+	ld i, peg_tops
+	add i, v9
+	ld v0, v2
+	ld [i], v0
+	ld v0, 0xFF
+	ld [flying], v0
+	; Check whether board is solved now
+	ld v0, [num_disks]
+	ld v4, v0
+	ld i, disk_data
+@solve_check_loop:
+	ld v3, [i]
+	if v0 != 2: jp @check_alternative_solution
+	add v4, -1
+	if v4 != 0: jp @solve_check_loop
+	jp ending_screen
+@check_alternative_solution:
+	ld v0, [num_disks]
+	ld v4, v0
+	ld i, disk_data
+@solve_check_loop2:
+	ld v3, [i]
+	if v0 != 1: ret
+	add v4, -1
+	if v4 != 0: jp @solve_check_loop2
+	jp ending_screen
+
+
+run_game:
+	; Check bitmask of which keys are being held
+	; v1 = Bitmask of peg indicators (1+2+4)
+	; v2 = Directions (left/right): -1, 0 or 1
+	ld v1, 0
+	ld v2, 0
+	ld v0, 1 : if key v0 : add v1, 1
+	ld v0, 2 : if key v0 : add v1, 2
+	ld v0, 3 : if key v0 : add v1, 4
+	ld v0, 4 : if key v0 : add v2, -1
+	ld v0, 6 : if key v0 : add v2, 1
+
+	; If no key is being held, drop disks
+	if v1 != 0 : jp @actions
+	if v2 != 0 : jp @actions
+	call drop_disks
+	jp run_game
+
+@actions:
+	ld vb, v2
+	; Lift up the topmost disc in all indicated piles
+	ld v0, 1 : call frame_delay
+	ld v7, 0
+@lift_loop:
+	shr v1,v1
+	if vf=0 : jp @lift_dont
+
+	ld v8, 0xFF
+	call find_topmost
+	if v9=0xFF: jp @lift_dont
+	ld va, v9
+	ld i, drw_disk_backup+16
+	ld [i],v7
+	call @lift_disk_check
+	ld i, drw_disk_backup+16
+	ld v7,[i]
+
+@lift_dont:
+	add v7, 1
+	if v7 != 3: jp @lift_loop
+
+	ld i, drw_disk_backup+8
+	ld v2, [i]
+	;
+	; Test moving sideways
+	if vb=0: jp run_game
+	; For each disk that is at Y=0, try moving
+	call toggle_sideguards
+	ld v0, [num_disks]
+	ld va, v0
+@move_loop:
+	if va=0: jp @move_completed
+	add va,-1
+	ld v5, va
+	shl v5, v5
+	shl v5, v5
+	ld i, disk_data
+	add i, v5
+	ld v3, [i]
+	if v2 != 0: jp @move_loop
+	
+	call @disk_move_sideways
+	; Did it collide?
+	if vf != 0 : jp @collision
+
+	; Find if the disk is currently atop a peg it _can_ land on
+	ld v5, va
+	shl v5, v5
+	shl v5, v5
+	ld i, disk_data
+	add i, v5
+	ld v3, [i]
+	call find_closest_peg
+	ld v8, va
+	call find_topmost
+	; v9 = topmost disk in that pile
+	; If v9 <= va, then we can't land there
+	; If v9 > va, we can
+	if v9=0xFF: jp @peg_changed
+	ld v0, va
+	sub v0, v9
+	if vf=1: jp @peg_changed
+	jp @move_loop
+@peg_changed:
+	; Accept this peg id
+	ld v0, v7
+	ld i, disk_data
+	add i, v5
+	ld [i], v0
+	; continue loop
+	jp @move_loop
+
+@collision:
+	; Collided! Undo the horizontal move.
+	ld v0, 0
+	subn vb, v0
+	call @disk_move_sideways
+	ld v0, 0
+	subn vb, v0
+	jp @move_loop
+
+@disk_move_sideways:
+	; Remove disk from its present location
+	ld v9, va
+	call render_disk
+	
+	; Update X coordinate
+	ld v5, va
+	shl v5, v5
+	shl v5, v5
+	ld i, disk_data
+	add i, v5
+	ld v3, [i]
+	add v3, vb
+	; Save modified data
+	ld i, disk_data
+	add i, v5
+	ld [i], v3
+
+	; Render disk at updated location
+	ld v9, va
+	jp render_disk
+
+@move_completed:
+	call toggle_sideguards
+	jp run_game
+
+
+@lift_disk_check:
+	ld v0, [flying]
+	if v0 = 0xFF: jp @approve_flyer
+	if v0 != va:  ret
+@approve_flyer:
+	ld v5, va
+	shl v5, v5
+	shl v5, v5
+	ld i, disk_data
+	add i, v5
+	ld v3, [i]
+	if v2 = 0: ret ; Already at top
+	; If the disk is current nested on top of the pile, update the top of the pile
+	;
+	ld v7, v0
+	ld v8, va
+	call find_topmost ; v9 = topmost disk in that pile
+	ld v0, game_room
+	if v9 = 0xFF: jp @nothing_below
+	; Find the ycoord+height for the topmost disk
+	ld i, disk_data
+	ld v5, v9
+	shl v5, v5
+	shl v5, v5
+	add i, v5
+	ld v2, [i]
+	add v1,v2
+@nothing_below:
+	ld i, peg_tops
+	add i, v7
+	ld [i], v0
+	;
+	ld v0, [flying]
+	if v0 != 0xFF: jp @already_flying
+	ld v0, va
+	ld [flying], v0
+	call inc_moves
+@already_flying:
+	; Remove disk from its present location
+	ld v9, va
+	call render_disk
+	; Decrement the Y coordinate
+	ld v5, va
+	shl v5, v5
+	shl v5, v5
+	ld i, disk_data
+	add i, v5
+	ld v2, [i]
+	add v2, -1
+	; Save modified data
+	ld i, disk_data
+	add i, v5
+	ld [i], v2
+	; Draw disk in new location
+	ld v9, va
+	jp render_disk
+
+
+
+find_topmost:
+	; Find the topmost disk of given pile
+	; Input:  v7 = pile id
+	;         v8 = ignore this disk id
+	; Result: v9 = disk id (or 0xFF if no disk in that pile)
+	; Temps: v0-v5
+	; Preserves: v0-v6, v8, va-ve
+	ld [drw_disk_backup], v5
+	ld v0, [num_disks]
+	ld [@end_condition+1], v0 ; save number of disks in that condition
+	ld i, disk_data
+	ld v4, 0  ; current disk id
+	ld v5, 0xFF ; topmost coordinate
+	ld v9, 0xFF
+@loop:
+	ld v3, [i]
+	if v0 != v7: jp @not_the_one ; wrong pile
+	if v4 = v8:  jp @not_the_one ; ignore this disk
+	ld v1, v2
+	; If v2 < v5, choose this
+	sub v2, v5 : if vf=1 : jp @not_the_one
+	ld v9, v4
+	ld v5, v1
+@not_the_one:
+	add v4, 1
+@end_condition:
+	if v4 != 0x34: jp @loop
+	ld v5, [drw_disk_backup]
+	ret
+
+
+find_closest_peg:
+	; Find the closest peg to the given X coordinate.
+	; Input:  v3 = x coordinate
+	; Temps:  v0-v2,v4
+	; Preserves: v0-v6, v8-ve
+	; Result: v7 = pile id
+	ld [drw_disk_backup], v4
+	ld v1, 0
+	ld v4, 0xFF
+	ld i, peg_xcoords
+@loop:
+	ld v0, [i]
+	; Calc abs(v3 - v0)
+	sub v0, v3
+	ld v2, 128
+	and v2, v0
+	if v2 = 0 : jp @not_negative
+	ld v2, 0
+	subn v0, v2
+@not_negative:
+	; If v0 < v4, choose.
+	ld v2, v0
+	sub v2, v4
+	if vf=1 : jp @ignore
+	ld v4, v0
+	ld v7, v1
+@ignore:	
+	add v1,1
+	if v1 != 3: jp @loop
+	ld v4, [drw_disk_backup]
+	ret
+
+
+toggle_sideguards:
+	ld i,shr_patterns
+	ld v6,0
+	ld v7,1
+	drw v6,v7,1
+	ld v6,63
+	drw v6,v7,1
+	ret
+
+draw_peg:
+	; Input:
+	;     v4:     X coordinate for peg base
+	;     v5:     Peg height (1-32)
+	;     v6,v3:  X & Y coordinates
+	; Temps:
+	;     v0,v1,v2
+	ld i, drw_disk_backup
+	ld [i],v5  ; backup v3,v4,v5 (and v0,v1,v2)
+
+@loop:	ld v0, v5
+	; if v0 > 15, v0 = 15
+	ld v1, 15
+	sub v1, v0  ;if 15 < v0
+	if vf=0 : ld v0, 15
+	ld v1,v0
+	  ld i, @drw+1
+	  ; The correct DRW instruction is D63N where N = v1.
+	  ; Because N cannot come from a register, we have to
+	  ; modify the code at runtime.
+	  ld v0, 0x30
+	  or v0, v1
+	  ld [i], v0 ; Put 0x30 | v5
+	  ld i, peg_pat
+@drw:	  drw v6,v3,0
+	add v3,v1
+	sub v5,v1
+	if v5 != 0: jp @loop
+	
+	ld v1, peg_base_width/8
+	ld i, bit_patterns_right
+@base_loop_8:
+	; Draw peg base
+	drw v4,v3,1
+	add v4, 8
+	add v1,-1
+	if v1 != 0: jp @base_loop_8
+
+	; we need  i = bit_patterns_left + (peg_base_width%8)
+	ld i, bit_patterns_left + (peg_base_width % 8)
+	drw v4,v3,1
+
+	; Restore register backups
+	ld i, drw_disk_backup
+	ld v5,[i]
+	ret
+
+
+draw_disk_center:
+	; Input:
+	;     v4:     Disc width (8-20)
+	;     v5:     Disc height (1-15)
+	;     v6,v7:  X & Y coordinates (upper center coordinate)
+	;     v8:     Number of skewered pixel rows in the bottom
+	; Modifies:   v4
+	; Temps:      v0,v1,v2,v3, v9, vc-ve
+	; Preserves:  v0-v8, va-vb
+	; Returns:    vf = collision
+	; See draw_disk
+	ld i, drw_disk_backup
+	ld [i],v6
+	ld v0, v4
+	shr v0, v0
+	sub v6, v0
+	call draw_disk
+	ld i, drw_disk_backup
+	ld v6,[i]
+	ret
+draw_disk:
+	; Input:
+	;     v4:     Disc width (8-20)
+	;     v5:     Disc height (1-15)
+	;     v6,v7:  X & Y coordinates (upper left coordinate)
+	;     v8:     Number of skewered pixel rows in the bottom
+	; Modifies:   v4
+	; Returns:    vf = collision
+	; Temps:
+	;     v0:     Mathematics
+	;     v1:     Pixels remaining until peg begin
+	;     v2:     Pixels remaining until peg end
+	;     v3:     Number of bits to process at once
+	;     v4:     Remaining pixels
+	;     v9:     Bitmask for bottom and top rows
+	;     vc:     Bit pattern for peg
+	;     ve:     Bit pattern for edges
+	;     vd:     Return value
+
+	ld vd, 0x00
+	; Peg is peg_width pixels wide
+	ld v1, v4
+	add v1, -peg_width ; Non-peg pixels: (v4 - peg_width)
+	shr v1, v1         ; Peg begins at:  (v4 - peg_width) / 2
+	ld v2, v1
+	add v2, peg_width  ; Peg ends at:    (v4 - peg_width) / 2 + peg_width
+	ld ve, 0x80
+@xloop:
+	; num_bits = v4
+	; if num_bits <= 8, ve |= shr_patterns[num_bits-1]
+	; if num_bits > 8; num_bits = 8
+	ld v0, 8
+	ld v3, 8
+	sub v0, v4
+	if vf=0 : jp @not_rightedge
+@rightedge:
+	ld v3, v4
+	ld i, shr_patterns-1
+	add i, v3
+	ld v0, [i]
+	or ve, v0
+@not_rightedge:
+	; v9 = bit_patterns_left[num_bits]
+	ld i, bit_patterns_left
+	add i, v3
+	ld v0, [i]
+	ld v9, v0
+
+	; Calculate peg pattern
+	ld vc, 0x00
+	; If v1 < 0, vc |= 0xFF
+	ld v0, 0x80
+	and v0, v1
+	if v0 != 0: jp @peg_omnipresent
+	; If v1 < 8, vc |= bit_patterns_right[v1]
+	ld v0, 8
+	subn v0, v1 ; v0 = v1-8
+	if vf=1 : jp @peg_done
+	ld i, bit_patterns_right
+	add i, v1
+	ld v0, [i]
+	or vc, v0
+@test_peg_right:
+	; If v2 <= 8, vc &= bit_patterns_left[v2]
+	ld v0, 9
+	subn v0, v2 ; v0 = v2-8
+	if vf=1 : jp @peg_done
+	ld i, bit_patterns_left
+	add i, v2
+	ld v0, [i]
+	and vc, v0
+@peg_done:
+	ld i, drw_disk_backup
+	ld [i], v4
+	call @draw_disk_8pix
+	or vd, vf
+	ld i, drw_disk_backup
+	ld v4, [i]
+
+	ld ve, 0x00  ; assume no edge bits
+	add v6, v3
+	sub v4, v3
+	sub v1, v3
+	sub v2, v3
+	if v4 != 0 : jp @xloop
+	; return if everything done
+	ld vf, vd
+	ret 
+@peg_omnipresent:
+	; If v2 <= 0, jp @peg_done
+	; if (v2-1) < 0
+	ld vf, 0x80
+	ld v0, v2
+	add v0, -1
+	and v0, vf
+	if v0 != 0 : jp @peg_done
+	ld vc, 0xFF
+	jp @test_peg_right
+
+@draw_disk_8pix:
+	; Input (unmodified except for v9):
+	;     v5:     Disc height (1-15)
+	;     v6,v7:  X & Y coordinates
+	;     v8:     Number of skewered pixel rows in the bottom
+	;     v9:     Bitmask specifying number of bits (1 = 0x80, 2 = 0xC0, ... 8 = 0xFF)
+	;             Also doubles as bit pattern for bottom and top rows
+	;     vc:     Bit pattern for peg
+	;     ve:     Bit pattern for edges
+	; Temps:
+	;     v0:     Pattern to draw
+	;     v1:     Mathematics
+	;     v2:     Current row number
+	;     v3:     Bit pattern for even lines
+	;     v4:     Bit pattern for odd lines
+	; Return:
+	;     vf:     Collision
+	; Unused:
+	;     va,vb
+	;
+	ld v3, 0x55 : and v3, v9 : or v3, ve
+	ld v4, 0xAA : and v4, v9 : or v4, ve
+	xor v9, ve ; Make rounded corners
+
+	; Draw the top row
+	ld v2, 0        ; Current row number
+	ld i, disk_pat
+	add v5, -1 ; nrows-1 works better for us
+@v9:	ld v0, v9 ; Pattern for top of the disk
+@row_loop:
+	; If v2 > (v5-v8), xor out the peg pattern
+	; if v3 < v2
+	ld v1, v5
+	sub v1, v8
+	if vf=0: jp @xor_peg
+	sub v1, v2
+	; Xor out the peg pattern if necessary
+	if vf=0
+	@xor_peg: xor v0,vc
+
+	; Store the pattern. Increments I as well.
+	ld [i], v0
+	
+	; Do next row
+	if v2 = v5 : jp @done
+	add v2, 1
+	; Choose pattern for the next row:
+	; If v2 = v5,      choose v9
+	; Else if v2 & 1,  choose v3
+	; Else             choose v4
+	if v2 = v5 : jp @v9
+	ld v1, 1
+	and v1, v2
+	ld v0, v3 : if v1 = 0: ld v0, v4
+	jp @row_loop
+@done:
+	add v5, 1 ; Undo the -1 we did
+	ld i, @drw+1
+	; The correct DRW instruction is D67N where N = v5.
+	; Because N cannot come from a register, we have to
+	; modify the code at runtime.
+	ld v0, 0x70
+	or v0, v5
+	ld [i], v0 ; Put 0x70 | v5
+
+	ld i, disk_pat
+@drw:	drw v6,v7, 0 ; updates VF
+	ret
+
+
+
+div_v9:
+	; Divide v0_v1 by v9, producing v2 (0-FF). If result > FF, clamped to FF.
+	; Result: v2    = quotient
+	;         v0_v1 = modulo
+	; Modifies v0_v1.
+	; Use v3,va,vb,vc,vd as temps.
+	;   v0_v1: remain
+	;   va_vb: part1
+	;   vc_vd: mask
+	;   v2:    result
+	; Unused: v4-v8, ve
+	;
+	if v9=0 : jp @overflow
+	ld va,0 : ld vb,v9 ; va_vb = divisor = v9
+	ld vc,0 : ld vd,1  ; vc_vd = mask = 1
+@loop1:	shl va,va : shl vb,vb : if vf<>0 : add va,1
+	shl vc,vc : shl vd,vd : if vf<>0 : add vc,1
+	ld v3,va : shl v3,v3 : if vf=0 : jp @loop1
+	ld v2,0 ; result = 0
+@loop2:
+	; if(remain >= part1), goto @sub, else goto @skip
+	; if(remain < part1), goto @skip, else goto @sub
+	ld v3,v0 : sub v3,va : if vf=0 : jp @skip
+	if v3<>0 : jp @sub
+	ld v3,v1 : sub v3,vb : if vf=0 : jp @skip
+@sub:
+	; remain -= part1
+	sub v0,va : sub v1,vb : if vf=0 : add v0,-1
+	; result += mask
+	add v2,vd : if vf=1 : jp @overflow
+	if vc<>0: jp @overflow
+@skip:	; part1 >>= 1
+	shr vb,vb : shr va,va : if vf<>0: add vb,0x80
+	; mask >>= 1
+	shr vd,vd : shr vc,vc : if vf<>0: add vd,0x80
+	; if mask <> 0, goto @loop2
+	if vd <> 0 : jp @loop2
+	if vc <> 0 : jp @loop2
+	ret
+@overflow:
+	ld v2,0xFF
+	ret
+
+
+mul_v9:
+	; Multiply v0 by v9, producing v0_v1.
+	; Uses v2,v3 as temps.
+	; Preserves: v4-v8, va-ve
+	; Modifies v9,vf.
+	ld v2, v0   ; v2 = a
+	ld v3, 0  ;v3:v9 = b
+	ld v1, 0
+	ld v0, 0
+@loop:	if v2 = 0: ret
+	shr v2,v2
+	if vf=0: jp @dont_add
+	 add v0, v3
+	 add v1, v9 : if vf=1 : add v0,1
+@dont_add:
+	shl v3,v3
+	shl v9,v9 : if vf=1 : add v3,1
+	jp @loop
+	
+
+frame_delay:
+	; v0 = number of frames to wait
+	; Preserved: v1-vf, i
+	ld dt, v0
+frame_delay_wait:
+	ld v0, dt : if v0 != 0 : jp frame_delay_wait
+	ret
+
+
+check_anykey:
+	ld vf, 1
+	ld v0, 0
+@ktest:	if key v0 : ret
+	add v0, 1 : if v0 <> 16 : jp @ktest
+	ld vf, 0
+	ret
+
+
+make_dithpat:
+	; v9 = level (0-16)
+	ld v6, 3    ; y coordinate
+	ld v2, 4-1    ; number 4, for add_i
+	ld ve, 1
+    @yloop:
+	ld i, dithmat
+	add i, v6
+	add i, v6
+	add i, v6
+	add i, v6
+	ld v4, 0    ; accumulated bitmask
+	ld v5, 0x88 ; this bitmask
+    @xloop:
+	ld v0, [i] ; load threshold
+	;add i, ve
+	sub v0, v9
+	if vf=0 : or v4, v5
+	shr v5, v5
+	if vf=0 : jp @xloop
+	ld i,  dithpat1
+	add i, va
+
+	ld v0, v4
+	add i, v6 : ld [i], v0
+	add i, v2 : ld [i], v0
+	add i, v2 : ld [i], v0
+	
+	;add i, v6 : ld v0, [i] : xor v0,v4 : ld [i], v0
+	;add i, v2 : ld v0, [i] : xor v0,v4 : ld [i], v0
+	;add i, v2 : ld v0, [i] : xor v0,v4 : ld [i], v0
+	
+	sub v6, ve
+	if vf=1 : jp @yloop
+	ld v0, 12
+	xor va, v0
+	ret
+
+
+clear_with_dithpat:
+	; Temps: v0,v1,v2,v3
+	ld v1, 0
+	ld v2, 12
+	ld v3, 24
+	ld i, dithpat2
+	call @clear
+	ld i, dithpat1
+    @clear:
+	ld v0,-8
+@xloop1:add v0,8:  drw v0,v1, 12: drw v0,v2, 12: drw v0,v3, 8
+	add v0,8:  drw v0,v1, 12: drw v0,v2, 12: drw v0,v3, 8
+	if v0 != 56: jp @xloop1
+	ret
+
+
+render_text:
+	; Input: v8=hi, v9=lo = address of text
+	;        v6,v7 = x & y  coordinates to render at
+	; Temps:
+	;        v0,v1  = character index & font pointer
+	;        v2,v3  = temp word
+	;        v4     = backup of v6
+	;        ve     = 1
+	ld ve,1
+	add v8, 0xA0 ; ld i, imm
+	ld v4, v6
+    @next_char:
+	ld v0, v8 : ld v1, v9 : ld [@text_ptr], v1
+    @text_ptr:
+	; Load character from string
+	ld v0, [0xAAA] ; self-modifying code
+	if v0 = 0 : ret
+	ld v2, -32
+	add v0, v2 : if vf=0 : jp @newline
+	; Multiply by 6 to turn into an offset to font6x5.
+	; Note: This will overflow into two bytes.
+	ld v1, v0 : ld v0, 0
+	; First multiply by two into v1,v0. c = orig*2
+	        shl v1,v1 : if vf!=0 : add v0,1
+	; Make copy. d = c
+	ld v2,v0 : ld v3,v1
+	; c *= 2
+	shl v0,v0: shl v1,v1 : if vf!=0 : add v0,1
+	; Now c = orig*4, d = orig*2. Do c += d
+	add v0, v2
+	add v1, v3 : if vf!=0 : add v0,1
+	; Then, c += font6x5
+	add v0, SHR(font6x5, 8)+0xA0
+	ld v2,  AND(font6x5, 255)
+	add v1, v2 : if vf!=0 : add v0,1
+	ld [@font_ptr], v1
+    @font_ptr:
+	; Load font width
+	ld v0, [0xAAA] ; self-modifying code
+	;add i, ve
+	drw v6,v7, 5
+	add v6,v0
+	; Wait a couple of frames
+		;ld v0, 30 : call frame_delay
+    @next_char_advance:
+	; Advance the font pointer
+	add v9, ve : if vf!=0 : add v8, 1
+	jp @next_char
+    @newline:
+        ld v6, v4
+	add v7, 6
+	jp @next_char_advance
+
+shr_patterns: .byte 0x80,0x40,0x20,0x10,0x08,0x04,0x02,0x01
+bit_patterns_left:  .byte 0x00,0x80,0xC0,0xE0,0xF0, 0xF8,0xFC,0xFE, 0xFF
+bit_patterns_right: .byte 0xFF,0x7F,0x3F,0x1F, 0x0F,0x07,0x03,0x01, 0x00
+
+peg_pat_one = SHL(SHR(0xFF,8-peg_width), 8-peg_width)
+peg_pat:  .byte peg_pat_one,peg_pat_one,peg_pat_one,peg_pat_one,peg_pat_one
+          .byte peg_pat_one,peg_pat_one,peg_pat_one,peg_pat_one,peg_pat_one
+          .byte peg_pat_one,peg_pat_one,peg_pat_one,peg_pat_one,peg_pat_one
+
+font6x5:
+        ; 6x5 font data, originally designed by Juha Nieminen for use in Joed:
+        .byte	2,  0,  0,  0,  0,  0,3, 64, 64, 64,  0, 64,5, 80, 80,  0,  0,  0;  32
+        .byte	6, 80,248, 80,248, 80,6,112,160,112, 40,240,6,136, 16, 32, 64,136;  35
+        .byte	6, 96, 96,104,144,104,3, 64, 64,  0,  0,  0,4, 32, 64, 64, 64, 32;  38
+        .byte	4, 64, 32, 32, 32, 64,7, 72, 48,252, 48, 72,6, 32, 32,248, 32, 32;  41
+        .byte	3,  0,  0,  0, 64,128,5,  0,  0,240,  0,  0,3,  0,  0,  0,  0, 64;  44
+        .byte	6,  8, 16, 32, 64,128,6,112,152,168,200,112,4, 64,192, 64, 64,224;  47
+        .byte	5, 96,144, 32, 64,240,5,240, 16, 96, 16,224,5, 80,144,240, 16, 16;  50
+        .byte	5,240,128,224, 16,224,5, 96,128,224,144, 96,5,240, 16, 32, 32, 64;  53
+        .byte	5, 96,144, 96,144, 96,5, 96,144,112, 16, 96,3,  0, 64,  0, 64,  0;  56
+        .byte	3,  0, 64,  0, 64,128,4, 32, 64,128, 64, 32,4,  0,224,  0,224,  0;  59
+        .byte	4,128, 64, 32, 64,128,5, 96,144, 32,  0, 32,5, 96,144,176,128, 96;  62
+        .byte	5, 96,144,240,144,144,5,224,144,224,144,224,5,112,128,128,128,112;  ABC
+        .byte	5,224,144,144,144,224,5,240,128,224,128,240,5,240,128,224,128,128;  DEF
+        .byte	5,112,128,176,144,112,5,144,144,240,144,144,4,224, 64, 64, 64,224;  GHI
+        .byte	5, 16, 16, 16,144, 96,5,144,160,192,160,144,5,128,128,128,128,240;  JKL
+        .byte	6,136,216,168,136,136,6,136,200,168,152,136,5, 96,144,144,144, 96;  MNO
+        .byte	5,224,144,224,128,128,5, 96,144,144,176,112,5,224,144,224,160,144;  PQR
+        .byte	5, 96,128, 96, 16,224,6,248, 32, 32, 32, 32,5,144,144,144,144, 96;  STU
+        .byte	6,136,136, 80, 80, 32,6,136,136,136,168, 80,6,136, 80, 32, 80,136;  VWX
+        .byte	6,136, 80, 32, 32, 32,6,248, 16, 32, 64,248,3,192,128,128,128,192;  YZ[
+        .byte	6,128, 64, 32, 16,  8,3,192, 64, 64, 64,192,4, 64,160,  0,  0,  0;  \]^
+        .byte	5,  0,  0,  0,  0,240,3,128, 64,  0,  0,  0,5,  0,112,144,144,112;  _`a
+        .byte	5,128,128,224,144,224,4,  0, 96,128,128, 96,5, 16, 16,112,144,112;  bcd
+        .byte	5,  0, 96,240,128, 96,4, 96,128,192,128,128,4,  0, 96,160, 96,192;  efg
+        .byte	5,128,128,224,144,144,2,128,  0,128,128,128,3, 64,  0, 64, 64,192;  hij
+        .byte	5,128,160,192,160,144,3,128,128,128,128, 64,6,  0,208,168,168,136;  klm
+        .byte	5,  0,224,144,144,144,5,  0, 96,144,144, 96,5,  0,224,144,224,128;  nop
+        .byte	5,  0,112,144,112, 16,4,  0, 96,128,128,128,5,  0,112,192, 48,224;  qrs
+        .byte	4, 64,224, 64, 64, 32,5,  0,144,144,144,112,6,  0,136,136, 80, 32;  tuv
+        .byte	6,  0,136,136,168, 80,5,  0,144, 96, 96,144,5,  0,144,112, 16, 96;  wxy
+        .byte	5,  0,240, 32, 64,240,4, 96, 64,128, 64, 96,3, 64, 64, 64, 64, 64;  z{|
+        .byte	4,192, 64, 32, 64,192,5, 80,160,  0,  0,  0, 255,0,0,0,0,0       ;  }~
+        .byte   0,0,0,0,0,0
+        ; 127 is designed for kerning, it's a backspace effectively
+
+title_str: .byte "T",127,"owers of Hanoi",0
+key_str:   .byte "Press any key",0
+setup_str: .byte "Please enter",13
+           .byte "the number of",13
+           .byte "disks (2-8):",0
+moves_str: .byte "Moves: ",0
+created_str:
+           .byte "Created by",13
+           .byte "Joel Yliluoma",0
+winner_str:
+	   .byte "You are winner!",13
+	   .byte "Congratulation!",0
+
+hex_tab:   .byte "0123456789ABCDEF " ; space at slot 16 is required by setup_screen.
+acceptable_setups: .byte 0,0,1,1,  1,1,1,1, 1,0,0,0, 0,0,0,0, 0 
+rnd_offset:        .byte 0,0,1,1, 0,1,-1,0
+dithmat:
+	.byte  1, 9, 3,11
+	.byte 13, 5,15, 7
+	.byte  4,12, 2,10
+	.byte 16, 8,14, 6
+
+peg_xcoords:       .byte peg1_center_x, peg2_center_x, peg3_center_x
+
+; Begin uninitialized RAM
+num_disks:	.byte "U"
+peg_height:     .byte "N"
+peg_y:		.byte "I"
+
+disk_widths:    .byte "NITIALIZED M"
+peg_tops:	.byte "EMO" ; in pixels
+flying:		.byte "R"
+n_moves:        .byte "Y  "
+; List of pegs that contain each disk
+disk_data:
+	; 16 * 4 records.
+	;     [0] = disk_location (which peg)
+	;     [1] = disk_height
+	;     [2] = disk_ycoord
+	;     [3] = disk_xcoord
+	.byte "0123456789ABCDEF"
+	.byte "0123456789ABCDEF"
+	.byte "0123456789ABCDEF"
+	.byte "0123456789ABCDEF"
+drw_disk_backup = disk_data + 16*4
+	.byte "0123456789ABCDEF0123456789ABCDEF"
+
+dithpat = disk_data
+	dithpat1 = dithpat+0
+	dithpat2 = dithpat+12

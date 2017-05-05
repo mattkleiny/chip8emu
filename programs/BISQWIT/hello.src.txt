@@ -1,0 +1,209 @@
+; Global registers: ve = 1
+
+start:	jp start1
+hello:	.byte "Hello, world!",0
+
+start1:
+	ld ve, 1
+	cls
+	ld va, 0
+	ld v9, 0
+	call make_dithpat
+    @clearloop:
+	call clear_with_dithpat
+	add v9, ve
+	call make_dithpat
+	ld v0, 3 : call frame_delay
+	if v9 != 18 : jp @clearloop
+	
+	ld v8, SHR(hello,8) : ld v9, AND(hello,255)
+	ld v6, 0 : ld v7, 0
+	call render_text
+	ld v8, SHR(copyr,8) : ld v9, AND(copyr,255)
+	ld v6, 0 : ld v7, 7
+	call render_text
+
+    @clearloop2b:
+	;ld v0, 120 : call frame_delay
+	rnd v0, 0x7F :  call frame_delay
+
+	ld v9, 0
+	ld v0, 2: ld st, v0
+	call make_dithpat
+	call make_dithpat
+    @clearloop2:
+	call clear_with_dithpat
+	add v9, ve
+	call make_dithpat
+	ld v0, 3 : call frame_delay
+	if v9 != 18 : jp @clearloop2
+	jp @clearloop2b
+
+    @end:
+	jp @end
+
+make_dithpat:
+	; v9 = level (0-16)
+	ld v6, 3    ; y coordinate
+	ld v2, 4-1    ; number 4, for add_i
+    @yloop:
+	ld i, dithmat
+	add i, v6
+	add i, v6
+	add i, v6
+	add i, v6
+	ld v4, 0    ; accumulated bitmask
+	ld v5, 0x88 ; this bitmask
+    @xloop:
+	ld v0, [i] ; load threshold
+	;add i, ve
+	sub v0, v9
+	if vf=0 : or v4, v5
+	shr v5, v5
+	if vf=0 : jp @xloop
+	ld i,  dithpat1
+	add i, va
+
+	ld v0, v4
+	add i, v6 : ld [i], v0
+	add i, v2 : ld [i], v0
+	add i, v2 : ld [i], v0
+	
+	;add i, v6 : ld v0, [i] : xor v0,v4 : ld [i], v0
+	;add i, v2 : ld v0, [i] : xor v0,v4 : ld [i], v0
+	;add i, v2 : ld v0, [i] : xor v0,v4 : ld [i], v0
+	
+	sub v6, ve
+	if vf=1 : jp @yloop
+	ld v0, 12
+	xor va, v0
+	ret
+
+
+
+clear_with_dithpat:
+	; Temps: v0,v1,v2,v3
+	ld v1, 0
+	ld v2, 12
+	ld v3, 24
+	ld i, dithpat2
+	call @clear
+	ld i, dithpat1
+    @clear:
+	ld v0,-8
+@xloop1:add v0,8:  drw v0,v1, 12: drw v0,v2, 12: drw v0,v3, 8
+	add v0,8:  drw v0,v1, 12: drw v0,v2, 12: drw v0,v3, 8
+	if v0 != 56: jp @xloop1
+	ret
+
+
+frame_delay:
+	; v0 = number of frames to wait
+	ld dt, v0
+    @wait:
+	ld v0, dt : if v0 != 0 : jp @wait
+	ret
+
+
+
+render_text:
+	; Input: v8=hi, v9=lo = address of text
+	;        v6,v7 = x & y  coordinates to render at
+	; Temps:
+	;        v0,v1  = character index & font pointer
+	;        v2,v3  = temp word
+	;        v4     = backup of v6
+	add v8, 0xA0 ; ld i, imm
+	ld v4, v6
+    @next_char:
+	ld v0, v8 : ld v1, v9 : ld [@text_ptr], v1
+    @text_ptr:
+	; Load character from string
+	ld v0, [0xAAA] ; self-modifying code
+	if v0 = 0 : ret
+	ld v2, -32
+	add v0, v2 : if vf=0 : jp @newline
+	; Multiply by 6 to turn into an offset to font6x5.
+	; Note: This will overflow into two bytes.
+	ld v1, v0 : ld v0, 0
+	; First multiply by two into v1,v0. c = orig*2
+	        shl v1,v1 : if vf!=0 : or v0,ve
+	; Make copy. d = c
+	ld v2,v0 : ld v3,v1
+	; c *= 2
+	shl v0,v0: shl v1,v1 : if vf!=0 : or v0,ve
+	; Now c = orig*4, d = orig*2. Do c += d
+	add v0, v2
+	add v1, v3 : if vf!=0 : add v0,1
+	; Then, c += font6x5
+	add v0, SHR(font6x5, 8)+0xA0
+	ld v2,  AND(font6x5, 255)
+	add v1, v2 : if vf!=0 : add v0,1
+	ld [@font_ptr], v1
+    @font_ptr:
+	; Load font width
+	ld v0, [0xAAA] ; self-modifying code
+	;add i, ve
+	drw v6,v7, 5
+	add v6,v0
+	; Wait a couple of frames
+	;ld v0, 30 : call frame_delay
+    @next_char_advance:
+	; Advance the font pointer
+	add v9, ve : if vf!=0 : add v8, 1
+	jp @next_char
+    @newline:
+    	ld v6, v4
+	add v7, 6
+	jp @next_char_advance
+
+dithmat:
+	.byte  1, 9, 3,11
+	.byte 13, 5,15, 7
+	.byte  4,12, 2,10
+	.byte 16, 8,14, 6
+font6x5:
+        ; 6x5 font data, originally designed by Juha Nieminen for use in Joed:
+        .byte	4,  0,  0,  0,  0,  0,3, 64, 64, 64,  0, 64,5, 80, 80,  0,  0,  0;  32
+        .byte	6, 80,248, 80,248, 80,6,112,160,112, 40,240,6,136, 16, 32, 64,136;  35
+        .byte	6, 96, 96,104,144,104,3, 64, 64,  0,  0,  0,4, 32, 64, 64, 64, 32;  38
+        .byte	4, 64, 32, 32, 32, 64,7, 72, 48,252, 48, 72,6, 32, 32,248, 32, 32;  41
+        .byte	3,  0,  0,  0, 64,128,5,  0,  0,240,  0,  0,3,  0,  0,  0,  0, 64;  44
+        .byte	6,  8, 16, 32, 64,128,6,112,152,168,200,112,4, 64,192, 64, 64,224;  47
+        .byte	5, 96,144, 32, 64,240,5,240, 16, 96, 16,224,5, 80,144,240, 16, 16;  50
+        .byte	5,240,128,224, 16,224,5, 96,128,224,144, 96,5,240, 16, 32, 32, 64;  53
+        .byte	5, 96,144, 96,144, 96,5, 96,144,112, 16, 96,3,  0, 64,  0, 64,  0;  56
+        .byte	3,  0, 64,  0, 64,128,4, 32, 64,128, 64, 32,4,  0,224,  0,224,  0;  59
+        .byte	4,128, 64, 32, 64,128,5, 96,144, 32,  0, 32,5, 96,144,176,128, 96;  62
+        .byte	5, 96,144,240,144,144,5,224,144,224,144,224,5,112,128,128,128,112;  ABC
+        .byte	5,224,144,144,144,224,5,240,128,224,128,240,5,240,128,224,128,128;  DEF
+        .byte	5,112,128,176,144,112,5,144,144,240,144,144,4,224, 64, 64, 64,224;  GHI
+        .byte	5, 16, 16, 16,144, 96,5,144,160,192,160,144,5,128,128,128,128,240;  JKL
+        .byte	6,136,216,168,136,136,6,136,200,168,152,136,5, 96,144,144,144, 96;  MNO
+        .byte	5,224,144,224,128,128,5, 96,144,144,176,112,5,224,144,224,160,144;  PQR
+        .byte	5, 96,128, 96, 16,224,6,248, 32, 32, 32, 32,5,144,144,144,144, 96;  STU
+        .byte	6,136,136, 80, 80, 32,6,136,136,136,168, 80,6,136, 80, 32, 80,136;  VWX
+        .byte	6,136, 80, 32, 32, 32,6,248, 16, 32, 64,248,3,192,128,128,128,192;  YZ[
+        .byte	6,128, 64, 32, 16,  8,3,192, 64, 64, 64,192,4, 64,160,  0,  0,  0;  \]^
+        .byte	5,  0,  0,  0,  0,240,3,128, 64,  0,  0,  0,5, 96, 16,112,144,112;  _`a
+        .byte	5,128,128,224,144,224,4,  0, 96,128,128, 96,5, 16, 16,112,144,112;  bcd
+        .byte	5,  0, 96,240,128, 96,4, 96,128,192,128,128,4,  0, 96,160, 96,192;  efg
+        .byte	5,128,128,224,144,144,4, 64,  0,192, 64,224,3, 64,  0, 64, 64,192;  hij
+        .byte	5,128,160,192,160,144,4,192, 64, 64, 64,224,6,  0,208,168,168,136;  klm
+        .byte	5,  0,224,144,144,144,5,  0, 96,144,144, 96,5,  0,224,144,224,128;  nop
+        .byte	5,  0,112,144,112, 16,4,  0, 96,128,128,128,5,  0,112,192, 48,224;  qrs
+        .byte	4, 64,224, 64, 64, 32,5,  0,144,144,144,112,6,  0,136,136, 80, 32;  tuv
+        .byte	6,  0,136,136,168, 80,5,  0,144, 96, 96,144,5,  0,144,112, 16, 96;  wxy
+        .byte	5,  0,240, 32, 64,240,4, 96, 64,128, 64, 96,3, 64, 64, 64, 64, 64;  z{|
+        .byte	4,192, 64, 32, 64,192,5, 80,160,  0,  0,  0;                        }~
+
+copyr:	.byte "(c) in 6/2015",13
+	.byte "Written by",13
+	.byte "Joel Yliluoma",13
+	.byte "iki.fi/bisqwit",0
+
+;dithpat1: .byte 0,0,0,0, 0,0,0,0, 0,0,0,0
+;dithpat2: .byte 0,0,0,0, 0,0,0,0, 0,0,0,0
+dithpat:
+	dithpat1 = dithpat+0
+	dithpat2 = dithpat+12
