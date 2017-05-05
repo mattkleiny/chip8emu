@@ -324,7 +324,7 @@ var OpcodeScenarios = map[string]OpcodeScenario{
 			},
 		},
 	},
-	"0Fx07 - LD Vx, DT": {
+	"0xFx07 - LD Vx, DT": {
 		{
 			0xF107,
 			func(t *testing.T, cpu *CPU) {
@@ -351,6 +351,12 @@ func TestOpcodes(t *testing.T) {
 				cpu.decodeAndExecute(test.Opcode)
 				if test.After != nil {
 					test.After(t, cpu)
+				}
+				// add some more detail to failing tests
+				if t.Failed() {
+					t.Logf("Instruction: %s", label)
+					t.Logf("Opcode: 0x%04X", test.Opcode)
+					t.FailNow()
 				}
 			}
 			// spin off a sub-test
