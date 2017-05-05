@@ -26,6 +26,7 @@
 package chip8
 
 import (
+	"log"
 	"math/rand"
 	"time"
 )
@@ -154,14 +155,11 @@ var fontSet = []byte{
 	0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 }
 
-// Programs are expected to start at 0x200.
-const startOffset = 0x200
-
 // Initializes a new CPU.
 func NewCPU() *CPU {
 	cpu := new(CPU)
 	// programs expected to start at 0x200
-	cpu.PC = startOffset
+	cpu.PC = 0x200
 	// load the font-set
 	for i := 0; i < len(fontSet); i++ {
 		cpu.Memory[i] = fontSet[i]
@@ -172,7 +170,7 @@ func NewCPU() *CPU {
 // Loads a program into the CPU from the given byte slice.
 func (cpu *CPU) LoadProgram(program []byte) {
 	for i := 0; i < len(program); i++ {
-		cpu.Memory[i+startOffset] = program[i]
+		cpu.Memory[i+0x200] = program[i]
 	}
 }
 
@@ -337,7 +335,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		cpu.PC = nnn + uint16(cpu.V[0])
 
 	case 0xC000: // RND Vx, byte
-		*Vx = randomByte() & kk
+		*Vx = byte(rand.Intn(255)) & kk
 
 	case 0xD000: // DRW Vx, Vy, nibble
 		// sample the sprite and render it at the (X, Y) coordinates
@@ -367,7 +365,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 			*Vx = cpu.DT
 
 		case 0x000A: // LD Vx, K
-			println("Wait for key input not yet supported")
+			log.Fatal("Cannot wait for keypress.")
 
 		case 0x0015: // LD DT, Vx
 			cpu.DT = *Vx
@@ -398,11 +396,6 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		}
 
 	default:
-		println("Unknown opcode: ", opcode)
+		log.Fatal("Unknown opcode: ", opcode)
 	}
-}
-
-// generates a random byte (0 to 255, inclusive).
-func randomByte() byte {
-	return byte(rand.Intn(255))
 }

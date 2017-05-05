@@ -41,90 +41,40 @@ var ( // Command line flags and arguments
 // the singleton chip 8 cpu
 var cpu = chip8.NewCPU()
 
-// map of runes to the associated flag in the cpu
+// map of scan-codes to the associated flag in the cpu
 var keypadLookup = map[sdl.Scancode]*bool{
-	scancode('1'): &cpu.Keypad[0x1],
-	scancode('2'): &cpu.Keypad[0x2],
-	scancode('3'): &cpu.Keypad[0x3],
-	scancode('4'): &cpu.Keypad[0xC],
-	scancode('5'): &cpu.Keypad[0x5],
-	scancode('6'): &cpu.Keypad[0x6],
-	scancode('7'): &cpu.Keypad[0x7],
-	scancode('8'): &cpu.Keypad[0x8],
-	scancode('9'): &cpu.Keypad[0x9],
-	scancode('0'): &cpu.Keypad[0x0],
-	scancode('q'): &cpu.Keypad[0x4],
-	scancode('w'): &cpu.Keypad[0x5],
-	scancode('e'): &cpu.Keypad[0x6],
-	scancode('r'): &cpu.Keypad[0xD],
-	scancode('a'): &cpu.Keypad[0x7],
-	scancode('s'): &cpu.Keypad[0x8],
-	scancode('d'): &cpu.Keypad[0x9],
-	scancode('f'): &cpu.Keypad[0xE],
-	scancode('z'): &cpu.Keypad[0xA],
-	scancode('x'): &cpu.Keypad[0x0],
-	scancode('c'): &cpu.Keypad[0x7],
-}
-
-// Retrieves the scan code for the given rune.
-func scancode(rune rune) sdl.Scancode {
-	return sdl.GetScancodeFromName(string(rune))
+	sdl.K_1: &cpu.Keypad[0x1],
+	sdl.K_2: &cpu.Keypad[0x2],
+	sdl.K_3: &cpu.Keypad[0x3],
+	sdl.K_4: &cpu.Keypad[0xC],
+	sdl.K_5: &cpu.Keypad[0x5],
+	sdl.K_6: &cpu.Keypad[0x6],
+	sdl.K_7: &cpu.Keypad[0x7],
+	sdl.K_8: &cpu.Keypad[0x8],
+	sdl.K_9: &cpu.Keypad[0x9],
+	sdl.K_0: &cpu.Keypad[0x0],
+	sdl.K_q: &cpu.Keypad[0x4],
+	sdl.K_w: &cpu.Keypad[0x5],
+	sdl.K_e: &cpu.Keypad[0x6],
+	sdl.K_r: &cpu.Keypad[0xD],
+	sdl.K_a: &cpu.Keypad[0x7],
+	sdl.K_s: &cpu.Keypad[0x8],
+	sdl.K_d: &cpu.Keypad[0x9],
+	sdl.K_f: &cpu.Keypad[0xE],
+	sdl.K_z: &cpu.Keypad[0xA],
+	sdl.K_x: &cpu.Keypad[0x0],
+	sdl.K_c: &cpu.Keypad[0x7],
 }
 
 // Entry point for the interpreter
 func main() {
 	parseCommandLine()
 
-	// load a test program
+	// load a test program and start it executing in the background
 	cpu.LoadProgram(readFile(*filenameFlag))
-
-	// run the cpu at a fixed frequency
 	go cpu.RunAtFrequency(*frequencyFlag)
 
-	// run the main event loop
-	run(func(renderer *sdl.Renderer) {
-		updateDisplay(renderer)
-		updateKeypad()
-	})
-}
-
-// Handles updating the window display via SDL.
-func updateDisplay(renderer *sdl.Renderer) {
-	// clear the display
-	renderer.SetDrawColor(0, 0, 0, 0)
-	renderer.Clear()
-
-	// render each pixel in the bitmap
-	renderer.SetDrawColor(255, 255, 255, 255)
-	for x := 0; x < chip8.Width-1; x++ {
-		for y := 0; y < chip8.Height-1; y++ {
-			// draw active pixels
-			if cpu.Pixels.GetPixel(x, y) > 0 {
-				renderer.DrawPoint(x, y)
-			}
-		}
-	}
-
-	// present the display
-	renderer.Present()
-}
-
-// Handles input translation to the chip 8 keypad.
-func updateKeypad() {
-	state := sdl.GetKeyboardState()
-	// check each key in our keyboard map and see if it's pressed
-	// if it is, update the associated flag in the cpu
-	for scancode, flag := range keypadLookup {
-		if state[scancode] == 1 {
-			*flag = true
-		} else {
-			*flag = false
-		}
-	}
-}
-
-// Bootstraps and executes the application via SDL
-func run(update func(renderer *sdl.Renderer)) {
+	// start winding up SDL
 	sdl.Init(sdl.INIT_VIDEO)
 
 	// create the main window
@@ -158,18 +108,41 @@ func run(update func(renderer *sdl.Renderer)) {
 				running = false
 
 			case *sdl.KeyDownEvent:
+				flag, ok := keypadLookup[e.Keysym.Scancode]
+				if ok {
+					*flag = true
+				}
+
+				// exit if escape is pressed
 				if e.Keysym.Sym == sdl.K_ESCAPE {
 					running = false
+				}
+
+			case *sdl.KeyUpEvent:
+				flag, ok := keypadLookup[e.Keysym.Scancode]
+				if ok {
+					*flag = false
 				}
 			}
 		}
 
 		// render to our display texture
 		renderer.SetRenderTarget(texture)
-
-		// execute the next frame if we don't have any further events to process
-		update(renderer)
-
+		// clear the display
+		renderer.SetDrawColor(0, 0, 0, 0)
+		renderer.Clear()
+		// render each pixel in the bitmap
+		renderer.SetDrawColor(255, 255, 255, 255)
+		for x := 0; x < chip8.Width-1; x++ {
+			for y := 0; y < chip8.Height-1; y++ {
+				// draw active pixels
+				if cpu.Pixels.GetPixel(x, y) > 0 {
+					renderer.DrawPoint(x, y)
+				}
+			}
+		}
+		// present the display
+		renderer.Present()
 		// upscale and copy the texture back to the window
 		renderer.SetRenderTarget(nil)
 		renderer.Copy(texture, nil, nil)
