@@ -86,7 +86,6 @@ func updateDisplay(renderer *sdl.Renderer) {
 	// clear the display
 	renderer.SetDrawColor(0, 0, 0, 0)
 	renderer.Clear()
-
 	// render each pixel in the bitmap
 	renderer.SetDrawColor(255, 255, 255, 255)
 	for x := 0; x < chip8.Width-1; x++ {
@@ -98,7 +97,6 @@ func updateDisplay(renderer *sdl.Renderer) {
 			}
 		}
 	}
-
 	// present the display
 	renderer.Present()
 }
@@ -135,6 +133,13 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 	}
 	defer renderer.Destroy()
 
+	// create a texture mimicking the default dimensions of the chip8 display
+	texture, err := renderer.CreateTexture(sdl.PIXELFORMAT_RGBA8888, sdl.TEXTUREACCESS_TARGET, chip8.Width, chip8.Height)
+	if err != nil {
+		log.Fatal("Failed to create main texture. ", err)
+	}
+	defer texture.Destroy()
+
 	// run the main event loop
 	running := true
 	for running {
@@ -150,8 +155,13 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 				}
 			}
 		}
+		// render to our display texture
+		renderer.SetRenderTarget(texture)
 		// execute the next frame if we don't have any further events to process
 		nextFrame(renderer)
+		// upscale and copy the texture back to the window
+		renderer.SetRenderTarget(nil)
+		renderer.Copy(texture, nil, nil)
 	}
 
 	sdl.Quit()

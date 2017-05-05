@@ -43,13 +43,51 @@ type OpcodeScenario []OpcodeTest
 // This test case set-up is based on ejholmes implementation here:
 // https://github.com/ejholmes/chip8/blob/master/chip8_test.go.
 var OpcodeScenarios = map[string]OpcodeScenario{
+	"0000 - SYS": {
+		{
+			// just make sure it doesn't explode
+			0x0000,
+			nil,
+			nil,
+		},
+	},
+	"00E0 - CLS": {
+		{
+			// just make sure it doesn't explode
+			0x00E0,
+			nil,
+			nil,
+		},
+	},
+	"00EE - RET": {
+		{
+			0x00EE,
+			func(t *testing.T, cpu *CPU) {
+				cpu.SP = 2
+				cpu.Stack[cpu.SP] = 0xFF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x0FF)
+				assertEquals(t, "SP", cpu.SP, 0x1)
+			},
+		},
+	},
+	"1nnn - JP ADDR": {
+		{
+			0x10FF,
+			nil,
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x0FF)
+			},
+		},
+	},
 	"2nnn - CALL ADDR": {
 		{
 			0x2100,
 			nil,
 			func(t *testing.T, cpu *CPU) {
-				assertEquals(t, "Stack[0]", cpu.Stack[0], 0x200)
 				assertEquals(t, "SP", cpu.SP, 0x1)
+				assertEquals(t, "Stack[1]", cpu.Stack[1], 0x200)
 				assertEquals(t, "PC", cpu.PC, 0x100)
 			},
 		},
@@ -404,14 +442,14 @@ var OpcodeScenarios = map[string]OpcodeScenario{
 			0xF265,
 			func(t *testing.T, cpu *CPU) {
 				cpu.I = 0x16
-				cpu.Memory[cpu.I + 0] = 0xB
-				cpu.Memory[cpu.I + 1] = 0xA
-				cpu.Memory[cpu.I + 2] = 0xD
+				cpu.Memory[cpu.I+0] = 0xB
+				cpu.Memory[cpu.I+1] = 0xA
+				cpu.Memory[cpu.I+2] = 0xD
 			},
 			func(t *testing.T, cpu *CPU) {
-				assertEquals(t, "V[0]", cpu.V[0], cpu.Memory[cpu.I + 0])
-				assertEquals(t, "V[1]", cpu.V[1], cpu.Memory[cpu.I + 1])
-				assertEquals(t, "V[2]", cpu.V[2], cpu.Memory[cpu.I + 2])
+				assertEquals(t, "V[0]", cpu.V[0], cpu.Memory[cpu.I+0])
+				assertEquals(t, "V[1]", cpu.V[1], cpu.Memory[cpu.I+1])
+				assertEquals(t, "V[2]", cpu.V[2], cpu.Memory[cpu.I+2])
 			},
 		},
 	},

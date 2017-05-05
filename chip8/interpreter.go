@@ -331,7 +331,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		// sample the sprite and render it at the (X, Y) coordinates
 		sprite := cpu.Memory[cpu.I:cpu.I+n]
 		if cpu.Pixels.writeSprite(sprite, x, y) {
-			*VF = 1 // we collided with a pixel
+			*VF = 1
 		} else {
 			*VF = 0
 		}
