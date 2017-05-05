@@ -76,13 +76,8 @@ type CPU struct {
 type Bitmap [Width * Height]byte
 
 // Retrieves the pixel value at the given (x, y) coordinates.
-func (bitmap *Bitmap) getPixel(x, y int) byte {
+func (bitmap *Bitmap) GetPixel(x, y int) byte {
 	return bitmap[x+y*Width]
-}
-
-// Sets the pixel value at the given (x, y) coordinates.
-func (bitmap *Bitmap) setPixel(x, y int, value byte) {
-	bitmap[x+y*Width] = value
 }
 
 // Empties the bitmap's content.
@@ -97,19 +92,21 @@ func (bitmap *Bitmap) clear() {
 // Writes a sprite at the given (x, y) coordinates.
 // A sprite is a collection of bits representing pixel values over a range.
 // Returns a flag indicating if an existing pixel was overwritten.
-func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collision bool) {
+func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collided bool) {
 	// wraps the given unsigned value around the given maximum
 	wrap := func(value, max byte) byte {
-		if value > max {
+		if value >= max {
 			return value - max
 		}
 		return value
 	}
 
-	// walk over the sprite
+	// walk over the sprite's bytes
 	for j := 0; j < len(sprite); j++ {
 		row := sprite[j]
-		for i := 0; i < 8; i++ { // 8 bits per sprite byte
+
+		// 8 bits per sprite byte
+		for i := 0; i < 8; i++ {
 			// calculate wrapped x and y pixel coordinates
 			xpos := wrap(x+byte(i), Width)
 			ypos := wrap(y+byte(j), Height)
@@ -118,10 +115,10 @@ func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collision bool) {
 
 			// see if we're stamping on an existing pixel
 			if *pixel == 0x01 {
-				collision = true
+				collided = true
 			}
 
-			// see if we're activating a pixel
+			// see if this bit is active and we should activate the pixel
 			mask := byte(0x80 >> byte(i))
 			if (row & mask) == mask {
 				*pixel = *pixel ^ 0x01

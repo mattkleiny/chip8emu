@@ -32,7 +32,7 @@ import (
 )
 
 var ( // Command line flags and arguments
-	filenameFlag  = flag.String("filename", "programs/GAMES/BREAKOUT", "The path to the program to load into the interpreter")
+	filenameFlag  = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load into the interpreter")
 	widthFlag     = flag.Int("width", 1024, "The width of the window")
 	heightFlag    = flag.Int("height", 768, "The height of the window")
 	frequencyFlag = flag.Uint("frequency", 60, "The frequency, in hertz, to run the processor at")
@@ -94,8 +94,7 @@ func updateDisplay(renderer *sdl.Renderer) {
 	for x := 0; x < chip8.Width-1; x++ {
 		for y := 0; y < chip8.Height-1; y++ {
 			// draw active pixels
-			pixel := cpu.Pixels[x+y*chip8.Height]
-			if pixel > 0 {
+			if cpu.Pixels.GetPixel(x, y) > 0 {
 				renderer.DrawPoint(x, y)
 			}
 		}

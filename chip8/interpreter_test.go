@@ -483,28 +483,6 @@ func TestOpcodes(t *testing.T) {
 	}
 }
 
-// Ensure we're able to reset the display bitmap completely.
-func TestClearBitmap(t *testing.T) {
-	bitmap := new(Bitmap)
-
-	// fill with junk
-	for x := 0; x < Width-1; x++ {
-		for y := 0; y < Height-1; y++ {
-			bitmap.setPixel(x, y, randomByte())
-		}
-	}
-
-	// clear the thing, assert it's empty
-	bitmap.clear()
-	for x := 0; x < Width-1; x++ {
-		for y := 0; y < Height-1; y++ {
-			if bitmap.getPixel(x, y) != 0 {
-				t.Error("The bitmap was not cleared successfully")
-			}
-		}
-	}
-}
-
 // Checks the the given value against the expected
 func assertEquals(t *testing.T, subject string, actual, expected interface{}) {
 	// Attempts to convert a value to a uint16
