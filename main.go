@@ -75,8 +75,7 @@ func main() {
 
 	// run the main event loop
 	run(func(renderer *sdl.Renderer) {
-		//cpu.NextCycle() // advance the active program by 1 cycle
-
+		cpu.NextCycle() // advance the active program by 1 cycle
 		updateDisplay(renderer)
 		updateKeypad()
 	})

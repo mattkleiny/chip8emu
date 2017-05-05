@@ -93,11 +93,12 @@ func (bitmap *Bitmap) clear() {
 	}
 }
 
-// Writes a sprite at the given (x, y) coordinates
+// Writes a sprite at the given (x, y) coordinates.
+// A sprite is a collection of bits representing pixel values over a range.
 // Returns a flag indicating if an existing pixel was overwritten.
 func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collision bool) {
-	// clamps the given unsigned value below the given maximum
-	clamp := func(value, max byte) byte {
+	// wraps the given unsigned value around the given maximum
+	wrap := func(value, max byte) byte {
 		if value > max {
 			return value - max
 		}
@@ -106,13 +107,26 @@ func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collision bool) {
 
 	// walk over the sprite
 	for j := 0; j < len(sprite); j++ {
-		for i := 0; i < 8; i++ {
-			xpos := clamp(x+byte(i), Width)
-			ypos := clamp(y+byte(j), Height)
+		row := sprite[j]
+		for i := 0; i < 8; i++ { // 8 bits per sprite byte
+			// calculate wrapped x and y pixel coordinates
+			xpos := wrap(x+byte(i), Width)
+			ypos := wrap(y+byte(j), Height)
 
 			pixel := &bitmap[xpos+ypos*Width]
 
-			*pixel = 0 // TODO: actually implement me
+			// see if we're stamping on an existing pixel
+			if *pixel == 0x01 {
+				collision = true
+			}
+
+			// see if we're activating a pixel
+			mask := byte(0x80 >> byte(i))
+			if (row & mask) == mask {
+				*pixel = *pixel ^ 0x01
+			} else {
+				*pixel = *pixel ^ 0x00
+			}
 		}
 	}
 
@@ -316,7 +330,11 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 	case 0xD000: // DRW Vx, Vy, nibble
 		// sample the sprite and render it at the (X, Y) coordinates
 		sprite := cpu.Memory[cpu.I:cpu.I+n]
-		cpu.Pixels.writeSprite(sprite, x, y)
+		if cpu.Pixels.writeSprite(sprite, x, y) {
+			*VF = 1 // we collided with a pixel
+		} else {
+			*VF = 0
+		}
 
 	case 0xE000: // SKNP Vx
 		if !cpu.Keypad[*Vx] {
