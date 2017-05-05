@@ -1,10 +1,32 @@
-// This package implements a simple Chip 8 interpreter for the Chip 8.
+// Copyright © 2017 Matthew Kleinschafer
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the “Software”), to deal in the Software without
+// restriction, including without limitation the rights to use,
+// copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following
+// conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+// HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+// WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
+
+// This package implements a Chip 8 interpreter.
 // See see http://devernay.free.fr/hacks/chip8/C8TECH10.HTM for more detail.
 package chip8
 
 import (
 	"math/rand"
-	"time"
 )
 
 const (
@@ -188,7 +210,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 	case 0x1000: // JP addr
 		cpu.PC = nnn
 
-	case 0x2000: // CALL addr
+	case 0x2000:                     // CALL addr
 		cpu.Stack[cpu.SP] = cpu.PC - 2 // account for instruction movement
 		cpu.SP += 1
 		cpu.PC = nnn
@@ -283,9 +305,5 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 
 // generates a random byte (0 to 255, inclusive).
 func randomByte() byte {
-	source := rand.NewSource(time.Now().UnixNano())
-	rng := rand.New(source)
-	value := rng.Intn(255)
-
-	return byte(value)
+	return byte(rand.Intn(255))
 }
