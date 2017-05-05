@@ -41,6 +41,31 @@ var ( // Command line flags and arguments
 // the singleton chip 8 cpu
 var cpu = chip8.NewCPU()
 
+// map of runes to the associated flag in the cpu
+var keypadLookup = map[sdl.Scancode]*bool{
+	scancode('0'): &cpu.Keypad[0],
+	scancode('1'): &cpu.Keypad[1],
+	scancode('2'): &cpu.Keypad[2],
+	scancode('3'): &cpu.Keypad[3],
+	scancode('4'): &cpu.Keypad[4],
+	scancode('5'): &cpu.Keypad[5],
+	scancode('6'): &cpu.Keypad[6],
+	scancode('7'): &cpu.Keypad[7],
+	scancode('8'): &cpu.Keypad[8],
+	scancode('9'): &cpu.Keypad[9],
+	scancode('A'): &cpu.Keypad[10],
+	scancode('B'): &cpu.Keypad[11],
+	scancode('C'): &cpu.Keypad[12],
+	scancode('D'): &cpu.Keypad[13],
+	scancode('E'): &cpu.Keypad[14],
+	scancode('F'): &cpu.Keypad[15],
+}
+
+// Retrieves the scan code for the given rune.
+func scancode(rune rune) sdl.Scancode {
+	return sdl.GetScancodeFromName(string(rune))
+}
+
 // Entry point for the interpreter
 func main() {
 	parseCommandLine()
@@ -50,7 +75,7 @@ func main() {
 
 	// run the main event loop
 	run(func(renderer *sdl.Renderer) {
-		cpu.NextCycle() // advance the active program by 1 cycle
+		//cpu.NextCycle() // advance the active program by 1 cycle
 
 		updateDisplay(renderer)
 		updateKeypad()
@@ -81,7 +106,16 @@ func updateDisplay(renderer *sdl.Renderer) {
 
 // Handles input translation to the chip 8 keypad.
 func updateKeypad() {
-	// TODO: handle keyboard input
+	state := sdl.GetKeyboardState()
+	// check each key in our keyboard map and see if it's pressed
+	// if it is, update the associated flag in the cpu
+	for scancode, flag := range keypadLookup {
+		if state[scancode] == 1 {
+			*flag = true
+		} else {
+			*flag = false
+		}
+	}
 }
 
 // Bootstraps and executes the application via SDL
