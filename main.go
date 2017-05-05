@@ -27,15 +27,15 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
-
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/xeusalmighty/chip8emu/chip8"
 )
 
 var ( // Command line flags and arguments
-	filenameFlag = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load into the interpreter")
-	widthFlag    = flag.Int("width", 1024, "The width of the window")
-	heightFlag   = flag.Int("height", 768, "The height of the window")
+	filenameFlag  = flag.String("filename", "programs/GAMES/BREAKOUT", "The path to the program to load into the interpreter")
+	widthFlag     = flag.Int("width", 1024, "The width of the window")
+	heightFlag    = flag.Int("height", 768, "The height of the window")
+	frequencyFlag = flag.Uint("frequency", 60, "The frequency, in hertz, to run the processor at")
 )
 
 // the singleton chip 8 cpu
@@ -73,9 +73,11 @@ func main() {
 	// load a test program
 	cpu.LoadProgram(readFile(*filenameFlag))
 
+	// run the cpu at a fixed frequency
+	go cpu.RunAtFrequency(*frequencyFlag)
+
 	// run the main event loop
 	run(func(renderer *sdl.Renderer) {
-		cpu.NextCycle() // advance the active program by 1 cycle
 		updateDisplay(renderer)
 		updateKeypad()
 	})
@@ -86,6 +88,7 @@ func updateDisplay(renderer *sdl.Renderer) {
 	// clear the display
 	renderer.SetDrawColor(0, 0, 0, 0)
 	renderer.Clear()
+
 	// render each pixel in the bitmap
 	renderer.SetDrawColor(255, 255, 255, 255)
 	for x := 0; x < chip8.Width-1; x++ {
@@ -97,6 +100,7 @@ func updateDisplay(renderer *sdl.Renderer) {
 			}
 		}
 	}
+
 	// present the display
 	renderer.Present()
 }
@@ -116,7 +120,7 @@ func updateKeypad() {
 }
 
 // Bootstraps and executes the application via SDL
-func run(nextFrame func(renderer *sdl.Renderer)) {
+func run(update func(renderer *sdl.Renderer)) {
 	sdl.Init(sdl.INIT_VIDEO)
 
 	// create the main window
@@ -155,13 +159,19 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 				}
 			}
 		}
+
 		// render to our display texture
 		renderer.SetRenderTarget(texture)
+
 		// execute the next frame if we don't have any further events to process
-		nextFrame(renderer)
+		update(renderer)
+
 		// upscale and copy the texture back to the window
 		renderer.SetRenderTarget(nil)
 		renderer.Copy(texture, nil, nil)
+
+		// don't eat the cpu
+		sdl.Delay(10)
 	}
 
 	sdl.Quit()
@@ -184,12 +194,19 @@ func parseCommandLine() {
 		flag.Usage()
 		log.Fatal("A valid filename was expected")
 	}
+
 	if *widthFlag == 0 {
 		flag.Usage()
 		log.Fatal("A valid width was expected")
 	}
+
 	if *heightFlag == 0 {
 		flag.Usage()
 		log.Fatal("A valid height was expected")
+	}
+
+	if *frequencyFlag == 0 {
+		flag.Usage()
+		log.Fatal("A valid frequency was expected")
 	}
 }

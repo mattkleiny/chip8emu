@@ -27,6 +27,7 @@ package chip8
 
 import (
 	"math/rand"
+	"time"
 )
 
 const (
@@ -175,6 +176,20 @@ func NewCPU() *CPU {
 func (cpu *CPU) LoadProgram(program []byte) {
 	for i := 0; i < len(program); i++ {
 		cpu.Memory[i+startOffset] = program[i]
+	}
+}
+
+// Runs the CPU at the given frequency, in hertz
+func (cpu *CPU) RunAtFrequency(frequency uint) {
+	// tick at a fixed interval (roughly)
+	clock := time.Tick(time.Second / time.Duration(frequency))
+	// run forever, or until an exit signal is detected
+	running := true
+	for running {
+		select {
+		case <-clock:
+			cpu.NextCycle() // advance the cpu
+		}
 	}
 }
 
