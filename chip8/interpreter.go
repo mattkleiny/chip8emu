@@ -194,7 +194,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 	y := byte((opcode & 0x00F0) >> 4)
 	kk := byte(opcode)
 	n := opcode & 0x000F
-	nnn := opcode & 0xFFF
+	nnn := opcode & 0x0FFF
 
 	// pointers for commonly accessed registers
 	Vx := &cpu.V[x]
@@ -262,7 +262,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 
 		case 0x0004: // ADD Vx, Vy
 			if *Vy > (0xFF - *Vx) {
-				*VF = 1 // carry
+				*VF = 1
 			} else {
 				*VF = 0
 			}
@@ -270,20 +270,33 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 
 		case 0x0005: // SUB Vx, Vy
 			if *Vy > (0xFF - *Vx) {
-				*VF = 1 // carry
+				*VF = 1
 			} else {
 				*VF = 0
 			}
 			*Vx -= *Vy
 
-		case 0x0006: // SHR Vx
-			panic("TODO")
+		case 0x0006: // SHR Vx {, Vy}
+			if (*Vx & 0x01) == 0x01 {
+				*VF = 1
+			} else {
+				*VF = 0
+			}
+			*Vx /= 2
 
 		case 0x0007: // SUBN Vx, Vy
-			panic("TODO")
+			if *Vy > *Vx {
+				*VF = 1
+			}
+			*Vx = *Vy - *Vx
 
-		case 0x000E: // SHL Vx
-			panic("TODO")
+		case 0x000E: // SHL Vx {, Vy}
+			if (*Vx & 0x80) == 0x80 {
+				*VF = 1
+			} else {
+				*VF = 0
+			}
+			*Vx *= 2
 		}
 
 	case 0x9000: // SNE Vx, Vy

@@ -35,10 +35,13 @@ type OpcodeTest struct {
 	After  func(t *testing.T, cpu *CPU)
 }
 
+// A scenario of tests for a particular opcode type.
+type OpcodeScenario []OpcodeTest
+
 // Tests for all potential opcodes in the system.
 // This test case set-up is based on ejholmes implementation here:
 // https://github.com/ejholmes/chip8/blob/master/chip8_test.go.
-var OpcodeTests = map[string][]OpcodeTest{
+var OpcodeScenarios = map[string]OpcodeScenario{
 	"2nnn - CALL ADDR": {
 		{
 			0x2100,
@@ -82,7 +85,158 @@ var OpcodeTests = map[string][]OpcodeTest{
 				cpu.V[1] = 0x03
 			},
 			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x202)
+			},
+		},
+	},
+	"5xy0 - SE Vx, Vy": {
+		{
+			0x5120,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x40
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x202)
+			},
+		},
+		{
+			0x5120,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x03
+				cpu.V[2] = 0x03
+			},
+			func(t *testing.T, cpu *CPU) {
 				assertEquals(t, "PC", cpu.PC, 0x204)
+			},
+		},
+	},
+	"6xkk - LD Vx, byte": {
+		{
+			0x6123,
+			nil,
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x23)
+			},
+		},
+	},
+	"7xkk - ADD Vx, byte": {
+		{
+			0x7101,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 01
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x02)
+			},
+		},
+	},
+	"8xy0 - LD Vx, Vy": {
+		{
+			0x8120,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x00
+				cpu.V[2] = 0xFF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0xFF)
+			},
+		},
+	},
+	"8xy1 - OR Vx, Vy": {
+		{
+			0x8121,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x00
+				cpu.V[2] = 0xF0
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0xF0)
+			},
+		},
+	},
+	"8xy2 - AND Vx, Vy": {
+		{
+			0x8122,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x0F
+				cpu.V[2] = 0xFF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x0F)
+			},
+		},
+	},
+	"8xy3 - XOR Vx, Vy": {
+		{
+			0x8123,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x0F
+				cpu.V[2] = 0xF0
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0xFF)
+			},
+		},
+	},
+	// TODO: check VF flag in these ops
+	"8xy4 - ADD Vx, Vy": {
+		{
+			0x8124,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x01
+				cpu.V[2] = 0x02
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x03)
+			},
+		},
+	},
+	"8xy5 - SUB Vx, Vy": {
+		{
+			0x8125,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x02
+				cpu.V[2] = 0x01
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x01)
+			},
+		},
+	},
+	"8xy6 - SHR Vx {, Vy}": {
+		{
+			0x8106,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x04
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x02)
+				assertEquals(t, "VF", cpu.V[0xF], 0)
+			},
+		},
+	},
+	"8xy7 - SUBN Vx, Vy": {
+		{
+			0x8127,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x04
+				cpu.V[2] = 0x04
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0)
+				assertEquals(t, "VF", cpu.V[0xF], 0)
+			},
+		},
+	},
+	"8xyE - SHL Vx {, Vy}": {
+		{
+			0x810E,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x02
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x04)
+				assertEquals(t, "VF", cpu.V[0xF], 0)
 			},
 		},
 	},
@@ -91,18 +245,15 @@ var OpcodeTests = map[string][]OpcodeTest{
 // Asserts that all of the opcodes execute as expected in the CPU
 func TestOpcodes(t *testing.T) {
 	// for each opcode scenario
-	for label, tests := range OpcodeTests {
-		// execute each individual test
-		for index, test := range tests {
+	for label, scenario := range OpcodeScenarios {
+		// execute each individual test in the scenario
+		for index, test := range scenario {
 			executeTest := func(t *testing.T) {
-				cpu := NewCPU() // allocate a new CPU
-				// before handling
+				cpu := NewCPU() // allocate a new CPU for each test scenario
 				if test.Before != nil {
 					test.Before(t, cpu)
 				}
-				// decode and execute
 				cpu.decodeAndExecute(test.Opcode)
-				// after handling
 				if test.After != nil {
 					test.After(t, cpu)
 				}
