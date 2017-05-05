@@ -335,6 +335,86 @@ var OpcodeScenarios = map[string]OpcodeScenario{
 			},
 		},
 	},
+	"0xFx15 - LD DT, Vx": {
+		{
+			0xF115,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0xFF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "DT", cpu.DT, 0xFF)
+			},
+		},
+	},
+	"0xFx18 - LD ST, Vx": {
+		{
+			0xF118,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0xFF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "ST", cpu.ST, 0xFF)
+			},
+		},
+	},
+	"0xFx1E - ADD I, Vx": {
+		{
+			0xF11E,
+			func(t *testing.T, cpu *CPU) {
+				cpu.I = 0xF0
+				cpu.V[1] = 0x0F
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "I", cpu.I, 0xFF)
+			},
+		},
+	},
+	"Fx33 - LD B, Vx": {
+		{
+			0xF133,
+			func(t *testing.T, cpu *CPU) {
+				cpu.I = 0xFF
+				cpu.V[1] = 0xFF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "M[I+0]", cpu.Memory[cpu.I+0], 2)
+				assertEquals(t, "M[I+1]", cpu.Memory[cpu.I+1], 5)
+				assertEquals(t, "M[I+2]", cpu.Memory[cpu.I+2], 5)
+			},
+		},
+	},
+	"Fx55 - LD [I], Vx": {
+		{
+			0xF255,
+			func(t *testing.T, cpu *CPU) {
+				cpu.I = 0x16
+				cpu.V[0] = 0xB
+				cpu.V[1] = 0xA
+				cpu.V[2] = 0xD
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "M[I+0]", cpu.Memory[cpu.I+0], cpu.V[0])
+				assertEquals(t, "M[I+1]", cpu.Memory[cpu.I+1], cpu.V[1])
+				assertEquals(t, "M[I+2]", cpu.Memory[cpu.I+2], cpu.V[2])
+			},
+		},
+	},
+	"Fx65 - LD [I], Vx": {
+		{
+			0xF265,
+			func(t *testing.T, cpu *CPU) {
+				cpu.I = 0x16
+				cpu.Memory[cpu.I + 0] = 0xB
+				cpu.Memory[cpu.I + 1] = 0xA
+				cpu.Memory[cpu.I + 2] = 0xD
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V[0]", cpu.V[0], cpu.Memory[cpu.I + 0])
+				assertEquals(t, "V[1]", cpu.V[1], cpu.Memory[cpu.I + 1])
+				assertEquals(t, "V[2]", cpu.V[2], cpu.Memory[cpu.I + 2])
+			},
+		},
+	},
 }
 
 // Asserts that all of the opcodes execute as expected in the CPU

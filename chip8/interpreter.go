@@ -234,9 +234,9 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 	case 0x1000: // JP addr
 		cpu.PC = nnn
 
-	case 0x2000:                     // CALL addr
-		cpu.Stack[cpu.SP] = cpu.PC - 2 // account for instruction movement
+	case 0x2000: // CALL addr
 		cpu.SP += 1
+		cpu.Stack[cpu.SP] = cpu.PC - 2
 		cpu.PC = nnn
 
 	case 0x3000: // SE Vx, byte
@@ -342,15 +342,37 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		}
 
 	case 0xF000:
-		switch opcode & 0x000F {
+		switch opcode & 0x00FF {
 		case 0x0007: // LD Vx, DT
 			*Vx = cpu.DT
-		}
 
-	case 0x0033: // LD B, Vx
-		cpu.Memory[cpu.I] = cpu.V[*Vx] / 100
-		cpu.Memory[cpu.I+1] = (cpu.V[*Vx] / 10) % 10
-		cpu.Memory[cpu.I+2] = (cpu.V[*Vx] % 100) % 10
+		case 0x000A: // LD Vx, K
+			println("Wait for key input not yet supported")
+
+		case 0x0015: // LD DT, Vx
+			cpu.DT = *Vx
+
+		case 0x0018: // LD ST, Vx
+			cpu.ST = *Vx
+
+		case 0x001E:
+			cpu.I = cpu.I + uint16(*Vx)
+
+		case 0x0033: // LD B, Vx
+			cpu.Memory[cpu.I] = *Vx / 100
+			cpu.Memory[cpu.I+1] = (*Vx / 10) % 10
+			cpu.Memory[cpu.I+2] = (*Vx % 100) % 10
+
+		case 0x0055: // LD [I], Vx
+			for i := byte(0); i <= x; i++ {
+				cpu.Memory[cpu.I+uint16(i)] = cpu.V[i]
+			}
+
+		case 0x0065: // LD Vx, [I]
+			for i := byte(0); i <= x; i++ {
+				cpu.V[i] = cpu.Memory[cpu.I+uint16(i)]
+			}
+		}
 
 	default:
 		println("Unknown opcode: ", opcode)
