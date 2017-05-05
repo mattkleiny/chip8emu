@@ -25,6 +25,7 @@ package chip8
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 )
 
@@ -237,6 +238,100 @@ var OpcodeScenarios = map[string]OpcodeScenario{
 			func(t *testing.T, cpu *CPU) {
 				assertEquals(t, "V1", cpu.V[1], 0x04)
 				assertEquals(t, "VF", cpu.V[0xF], 0)
+			},
+		},
+	},
+	"9xy0 - SNE Vx, Vy": {
+		{
+			0x9120,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x01
+				cpu.V[2] = 0x01
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x202)
+			},
+		},
+		{
+			0x9120,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x01
+				cpu.V[2] = 0x02
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x204)
+			},
+		},
+	},
+	"0xAnnn - LD I, addr": {
+		{
+			0xAFFF,
+			nil,
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "I", cpu.I, 0xFFF)
+			},
+		},
+	},
+	"0xBnnn - JP V0, addr": {
+		{
+			0xBFF0,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[0] = 0xF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0xFFF)
+			},
+		},
+	},
+	"0xCxkk - RND Vx, byte": {
+		{
+			0xC1FF,
+			func(t *testing.T, cpu *CPU) {
+				rand.Seed(1) // fix a seed for our RNG call
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x056)
+			},
+		},
+		{
+			0xC100,
+			func(t *testing.T, cpu *CPU) {
+				rand.Seed(1) // fix a seed for our RNG call
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0x000)
+			},
+		},
+	},
+	"0xExA1 - SKNP Vx": {
+		{
+			0xE1A1,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x1
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x204)
+			},
+		},
+		{
+			0xE1A1,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x1
+				cpu.Keypad[0x1] = true
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "PC", cpu.PC, 0x202)
+			},
+		},
+	},
+	"0Fx07 - LD Vx, DT": {
+		{
+			0xF107,
+			func(t *testing.T, cpu *CPU) {
+				cpu.DT = 0xFF
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "V1", cpu.V[1], 0xFF)
 			},
 		},
 	},
