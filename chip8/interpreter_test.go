@@ -407,6 +407,17 @@ var OpcodeScenarios = map[string]OpcodeScenario{
 			},
 		},
 	},
+	"Fx29 - LD F, Vx": {
+		{
+			0xF129,
+			func(t *testing.T, cpu *CPU) {
+				cpu.V[1] = 0x01
+			},
+			func(t *testing.T, cpu *CPU) {
+				assertEquals(t, "I", cpu.I, 0x05)
+			},
+		},
+	},
 	"Fx33 - LD B, Vx": {
 		{
 			0xF133,

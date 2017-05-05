@@ -370,6 +370,9 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		case 0x001E:
 			cpu.I = cpu.I + uint16(*Vx)
 
+		case 0x0029: // LD F, Vx
+			cpu.I = uint16(*Vx * 0x05)
+
 		case 0x0033: // LD B, Vx
 			cpu.Memory[cpu.I] = *Vx / 100
 			cpu.Memory[cpu.I+1] = (*Vx / 10) % 10
