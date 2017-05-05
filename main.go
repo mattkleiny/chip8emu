@@ -32,17 +32,14 @@ import (
 	"github.com/xeusalmighty/chip8emu/chip8"
 )
 
-var (
+var ( // Command line flags and arguments
 	filenameFlag = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load into the interpreter")
 	widthFlag    = flag.Int("width", 1024, "The width of the window")
 	heightFlag   = flag.Int("height", 768, "The height of the window")
 )
 
-// the chip 8 cpu
+// the singleton chip 8 cpu
 var cpu = chip8.NewCPU()
-
-// a map of runes to their associated byte in the chip 8 keypad
-var keymap = map[rune]*byte{}
 
 // Entry point for the interpreter
 func main() {
@@ -112,8 +109,8 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 			switch e := event.(type) {
 			case *sdl.QuitEvent:
 				running = false
+
 			case *sdl.KeyDownEvent:
-				// exit if 'esc' is pressed
 				if e.Keysym.Sym == sdl.K_ESCAPE {
 					running = false
 				}
@@ -126,7 +123,7 @@ func run(nextFrame func(renderer *sdl.Renderer)) {
 	sdl.Quit()
 }
 
-// Reads all of the bytes from the given file
+// Reads all of the bytes from the given file.
 func readFile(filename string) []byte {
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {

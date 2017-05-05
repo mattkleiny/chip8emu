@@ -74,6 +74,16 @@ type CPU struct {
 // 64 * 32 pixels (2048 total pixels). The origin (0, 0) is in the top left.
 type Bitmap [Width * Height]byte
 
+// Retrieves the pixel value at the given (x, y) coordinates.
+func (bitmap *Bitmap) getPixel(x, y int) byte {
+	return bitmap[x+y*Width]
+}
+
+// Sets the pixel value at the given (x, y) coordinates.
+func (bitmap *Bitmap) setPixel(x, y int, value byte) {
+	bitmap[x+y*Width] = value
+}
+
 // Empties the bitmap's content.
 func (bitmap *Bitmap) clear() {
 	for y := 0; y < Height-1; y++ {

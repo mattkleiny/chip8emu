@@ -113,13 +113,14 @@ func TestOpcodes(t *testing.T) {
 	}
 }
 
+// Ensure we're able to reset the display bitmap completely.
 func TestClearBitmap(t *testing.T) {
 	bitmap := new(Bitmap)
 
 	// fill with junk
 	for x := 0; x < Width-1; x++ {
 		for y := 0; y < Height-1; y++ {
-			bitmap[x+y*Width] = randomByte()
+			bitmap.setPixel(x, y, randomByte())
 		}
 	}
 
@@ -127,8 +128,34 @@ func TestClearBitmap(t *testing.T) {
 	bitmap.clear()
 	for x := 0; x < Width-1; x++ {
 		for y := 0; y < Height-1; y++ {
-			if bitmap[x+y*Width] != 0 {
+			if bitmap.getPixel(x, y) != 0 {
 				t.Error("The bitmap was not cleared successfully")
+			}
+		}
+	}
+}
+
+// Ensure we're able to write a sprite to the display bitmap
+func TestWriteSprite(t *testing.T) {
+	const size = 3    // square size of the sprite
+	const offsetX = 3 // x offset for resultant sprite
+	const offsetY = 6 // y offset for resultant sprite
+
+	sprite := []byte{
+		0x1, 0x2, 0x3,
+		0x4, 0x5, 0x6,
+		0x7, 0x8, 0x9,
+	}
+
+	// write the sprite into the bitmap
+	bitmap := new(Bitmap)
+	bitmap.writeSprite(sprite, offsetX, offsetY)
+
+	// check each of the resultant pixels
+	for x := offsetX; x < size+offsetX; x++ {
+		for y := offsetY; y < size+offsetY; y++ {
+			if bitmap.getPixel(x, y) != sprite[(x-offsetX)+(y-offsetY)*size] {
+				t.Errorf("The pixel byte at (%d, %d) does not match the expected", x, y)
 			}
 		}
 	}
