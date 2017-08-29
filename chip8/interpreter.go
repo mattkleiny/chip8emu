@@ -83,8 +83,8 @@ func (bitmap *Bitmap) GetPixel(x, y int) byte {
 
 // Empties the bitmap's content.
 func (bitmap *Bitmap) clear() {
-	for y := 0; y < Height-1; y++ {
-		for x := 0; x < Width-1; x++ {
+	for y := 0; y < Height; y++ {
+		for x := 0; x < Width; x++ {
 			bitmap[x+y*Width] = 0
 		}
 	}
@@ -94,20 +94,20 @@ func (bitmap *Bitmap) clear() {
 // A sprite is a collection of bits representing pixel values over a range.
 // Returns a flag indicating if an existing pixel was overwritten.
 func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collided bool) {
+	// TODO: attempt 2 at this
+
 	// wraps the given unsigned value around the given maximum
 	wrap := func(value, max byte) byte {
-		if value >= max {
+		if value > max {
 			return value - max
 		}
 		return value
 	}
 
-	// walk over the sprite's bytes
+	// walk over the sprite
 	for j := 0; j < len(sprite); j++ {
 		row := sprite[j]
-
-		// 8 bits per sprite byte
-		for i := 0; i < 8; i++ {
+		for i := 0; i < 8; i++ { // 8 bits per sprite byte
 			// calculate wrapped x and y pixel coordinates
 			xpos := wrap(x+byte(i), Width)
 			ypos := wrap(y+byte(j), Height)
@@ -119,7 +119,7 @@ func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collided bool) {
 				collided = true
 			}
 
-			// see if this bit is active and we should activate the pixel
+			// see if we're activating a pixel
 			mask := byte(0x80 >> byte(i))
 			if (row & mask) == mask {
 				*pixel = *pixel ^ 0x01
@@ -176,15 +176,10 @@ func (cpu *CPU) LoadProgram(program []byte) {
 
 // Runs the CPU at the given frequency, in hertz
 func (cpu *CPU) RunAtFrequency(frequency uint) {
-	// tick at a fixed interval (roughly)
-	clock := time.Tick(time.Second / time.Duration(frequency))
-	// run forever, or until an exit signal is detected
-	running := true
-	for running {
-		select {
-		case <-clock:
-			cpu.NextCycle() // advance the cpu
-		}
+	for {
+		cpu.NextCycle() // advance the cpu
+		// tick at a fixed interval (roughly)
+		time.Sleep(time.Second / time.Duration(frequency))
 	}
 }
 
@@ -245,6 +240,9 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 		cpu.PC = nnn
 
 	case 0x2000: // CALL addr
+		if cpu.SP+1%12 == 0 {
+			log.Fatal("Overflow in stack pointer")
+		}
 		cpu.SP += 1
 		cpu.Stack[cpu.SP%12] = cpu.PC
 		cpu.PC = nnn
@@ -339,7 +337,7 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 
 	case 0xD000: // DRW Vx, Vy, nibble
 		// sample the sprite and render it at the (X, Y) coordinates
-		sprite := cpu.Memory[cpu.I:cpu.I+uint16(n)]
+		sprite := cpu.Memory[cpu.I : cpu.I+uint16(n)]
 		if cpu.Pixels.writeSprite(sprite, x, y) {
 			*VF = 1
 		} else {

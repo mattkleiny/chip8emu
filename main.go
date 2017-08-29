@@ -25,10 +25,10 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
-	"log"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/xeusalmighty/chip8emu/chip8"
+	"io/ioutil"
+	"log"
 )
 
 var ( // Command line flags and arguments
@@ -133,8 +133,8 @@ func main() {
 		renderer.Clear()
 		// render each pixel in the bitmap
 		renderer.SetDrawColor(255, 255, 255, 255)
-		for x := 0; x < chip8.Width-1; x++ {
-			for y := 0; y < chip8.Height-1; y++ {
+		for x := 0; x < chip8.Width; x++ {
+			for y := 0; y < chip8.Height; y++ {
 				// draw active pixels
 				if cpu.Pixels.GetPixel(x, y) > 0 {
 					renderer.DrawPoint(x, y)
