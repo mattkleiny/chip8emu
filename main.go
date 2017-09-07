@@ -13,7 +13,7 @@ import (
 )
 
 var ( // Command line flags and arguments
-	filenameFlag  = flag.String("filename", "programs/GAMES/PONG", "The path to the program to load into the interpreter")
+	filenameFlag  = flag.String("filename", "programs/GAMES/MERLIN", "The path to the program to load into the interpreter")
 	widthFlag     = flag.Int("width", 1024, "The width of the window")
 	heightFlag    = flag.Int("height", 768, "The height of the window")
 	frequencyFlag = flag.Uint("frequency", 60, "The frequency, in hertz, to run the processor at")
@@ -22,29 +22,12 @@ var ( // Command line flags and arguments
 // the singleton chip 8 cpu
 var cpu = chip8.NewCPU()
 
-// map of scan-codes to the associated flag in the cpu
-var keypadLookup = map[sdl.Scancode]*bool{
-	sdl.K_1: &cpu.Keypad[0x1],
-	sdl.K_2: &cpu.Keypad[0x2],
-	sdl.K_3: &cpu.Keypad[0x3],
-	sdl.K_4: &cpu.Keypad[0xC],
-	sdl.K_5: &cpu.Keypad[0x5],
-	sdl.K_6: &cpu.Keypad[0x6],
-	sdl.K_7: &cpu.Keypad[0x7],
-	sdl.K_8: &cpu.Keypad[0x8],
-	sdl.K_9: &cpu.Keypad[0x9],
-	sdl.K_0: &cpu.Keypad[0x0],
-	sdl.K_q: &cpu.Keypad[0x4],
-	sdl.K_w: &cpu.Keypad[0x5],
-	sdl.K_e: &cpu.Keypad[0x6],
-	sdl.K_r: &cpu.Keypad[0xD],
-	sdl.K_a: &cpu.Keypad[0x7],
-	sdl.K_s: &cpu.Keypad[0x8],
-	sdl.K_d: &cpu.Keypad[0x9],
-	sdl.K_f: &cpu.Keypad[0xE],
-	sdl.K_z: &cpu.Keypad[0xA],
-	sdl.K_x: &cpu.Keypad[0x0],
-	sdl.K_c: &cpu.Keypad[0x7],
+// A mapping of SDL to Chip-8 key codes.
+var keycodes = map[sdl.Keycode]chip8.Keycode{
+	sdl.K_1: 0x01, sdl.K_2: 0x02, sdl.K_3: 0x03, sdl.K_4: 0x0C,
+	sdl.K_q: 0x04, sdl.K_w: 0x05, sdl.K_e: 0x06, sdl.K_r: 0x0D,
+	sdl.K_a: 0x07, sdl.K_s: 0x08, sdl.K_d: 0x09, sdl.K_f: 0x0E,
+	sdl.K_z: 0x0A, sdl.K_x: 0x00, sdl.K_c: 0x0B, sdl.K_v: 0x0F,
 }
 
 // Entry point for the interpreter
@@ -89,30 +72,21 @@ func main() {
 				running = false
 
 			case *sdl.KeyDownEvent:
-				flag, ok := keypadLookup[e.Keysym.Scancode]
-				if ok {
-					*flag = true
-				}
-
 				// exit if escape is pressed
 				if e.Keysym.Sym == sdl.K_ESCAPE {
 					running = false
 				}
+				cpu.Keypad.Press(keycodes[e.Keysym.Sym])
 
 			case *sdl.KeyUpEvent:
-				flag, ok := keypadLookup[e.Keysym.Scancode]
-				if ok {
-					*flag = false
-				}
+				cpu.Keypad.Release(keycodes[e.Keysym.Sym])
 			}
 		}
 
-		// render to our display texture
 		renderer.SetRenderTarget(texture)
-		// clear the display
 		renderer.SetDrawColor(0, 0, 0, 0)
 		renderer.Clear()
-		// render each pixel in the bitmap
+
 		renderer.SetDrawColor(255, 255, 255, 255)
 		for x := 0; x < chip8.Width; x++ {
 			for y := 0; y < chip8.Height; y++ {
@@ -122,9 +96,8 @@ func main() {
 				}
 			}
 		}
-		// present the display
+
 		renderer.Present()
-		// upscale and copy the texture back to the window
 		renderer.SetRenderTarget(nil)
 		renderer.Copy(texture, nil, nil)
 

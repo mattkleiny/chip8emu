@@ -49,7 +49,7 @@ type CPU struct {
 	SP     byte       // The stack pointer.
 	Stack  [12]uint16 // The stack of branching instructions; references the program counter.
 	DT, ST byte       // Delay/Sound timers. When above zero, they count down to zero. Counting occurs at 60hz.
-	Keypad [16]bool   // 16-key hexadecimal keypad. Boolean flag indicates if key is pressed or not.
+	Keypad *Keypad    // The keypad implementation, provided by the host.
 	Pixels Bitmap     // The pixel bitmap representing the display output.
 }
 
@@ -75,24 +75,35 @@ func (bitmap *Bitmap) clear() {
 // A sprite is a collection of bits representing pixel values over a range.
 // Returns a flag indicating if an existing pixel was overwritten.
 func (bitmap *Bitmap) writeSprite(sprite []byte, x, y byte) (collided bool) {
-	for yline := uint8(0); yline < uint8(len(sprite)); yline++ {
-		r := sprite[yline]
-		for xline := uint8(0); xline < 8; xline++ {
-			on := (r & byte(0x80>>xline)) == byte(0x80>>xline)
-			value := byte(0)
+	n := len(sprite)
 
-			if on {
-				value = 1
+	for yl := 0; yl < n; yl++ {
+		r := sprite[yl]
+
+		for xl := 0; xl < 8; xl++ {
+			i := 0x80 >> byte(xl)
+			on := (r & byte(i)) == byte(i)
+
+			xpos := uint16(x) + uint16(xl)
+			if xpos >= Width {
+				xpos = xpos - Width
 			}
 
-			xpos := uint16(x) + uint16(xline)
-			ypos := uint16(y) + uint16(yline)
+			ypos := uint16(y) + uint16(yl)
+			if ypos >= Height {
+				ypos = ypos - Height
+			}
 
 			if bitmap[xpos+ypos*Width] == 1 {
 				collided = true // collision detected
 			}
 
-			bitmap[xpos+ypos*64] ^= value
+			v := byte(0)
+			if on {
+				v = 0x1
+			}
+
+			bitmap[xpos+ypos*Width] ^= v
 		}
 	}
 	return
@@ -124,6 +135,8 @@ var fontSet = []byte{
 // Initializes a new CPU.
 func NewCPU() *CPU {
 	cpu := new(CPU)
+	// attach the keyboard
+	cpu.Keypad = NewKeypad()
 	// programs expected to start at 0x200
 	cpu.PC = 0x200
 	// load the font-set
@@ -314,12 +327,12 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 	case 0xE000:
 		switch opcode & 0x00FF {
 		case 0x009E: // SKP VX
-			if cpu.Keypad[*Vx&15] {
+			if cpu.Keypad.IsPressed(Keycode(*Vx)) {
 				cpu.PC += 2
 			}
 
 		case 0x00A1: // SKNP VX
-			if !cpu.Keypad[*Vx&15] {
+			if !cpu.Keypad.IsPressed(Keycode(*Vx)) {
 				cpu.PC += 2
 			}
 		}
@@ -330,7 +343,12 @@ func (cpu *CPU) decodeAndExecute(opcode uint16) {
 			*Vx = cpu.DT
 
 		case 0x000A: // LD Vx, K
-			log.Fatal("Cannot wait for keypress.")
+			key, err := cpu.Keypad.Read()
+			if err != nil {
+				log.Print(err)
+				return
+			}
+			*Vx = byte(key)
 
 		case 0x0015: // LD DT, Vx
 			cpu.DT = *Vx
