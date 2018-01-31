@@ -7,9 +7,9 @@ package main
 import (
 	"flag"
 	"github.com/veandco/go-sdl2/sdl"
-	"github.com/xeusalmighty/chip8emu/chip8"
 	"io/ioutil"
 	"log"
+	"bitbucket.org/mattklein/chip8emu/chip8"
 )
 
 var ( // Command line flags and arguments
