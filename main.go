@@ -5,11 +5,11 @@
 package main
 
 import (
+	"bitbucket.org/mattklein/chip8emu/chip8"
 	"flag"
 	"github.com/veandco/go-sdl2/sdl"
 	"io/ioutil"
 	"log"
-	"bitbucket.org/mattklein/chip8emu/chip8"
 )
 
 var ( // Command line flags and arguments
@@ -42,7 +42,7 @@ func main() {
 	sdl.Init(sdl.INIT_VIDEO)
 
 	// create the main window
-	window, err := sdl.CreateWindow("chip8emu", 100, 100, *widthFlag, *heightFlag, sdl.WINDOW_SHOWN)
+	window, err := sdl.CreateWindow("chip8emu", 100, 100, int32(*widthFlag), int32(*heightFlag), sdl.WINDOW_SHOWN)
 	if err != nil {
 		log.Fatal("Failed to create main window. ", err)
 	}
@@ -71,15 +71,17 @@ func main() {
 			case *sdl.QuitEvent:
 				running = false
 
-			case *sdl.KeyDownEvent:
+			case *sdl.KeyboardEvent:
 				// exit if escape is pressed
 				if e.Keysym.Sym == sdl.K_ESCAPE {
 					running = false
 				}
-				cpu.Keypad.Press(keycodes[e.Keysym.Sym])
-
-			case *sdl.KeyUpEvent:
-				cpu.Keypad.Release(keycodes[e.Keysym.Sym])
+				if e.State == sdl.PRESSED {
+					cpu.Keypad.Press(keycodes[e.Keysym.Sym])
+				}
+				if e.State == sdl.RELEASED {
+					cpu.Keypad.Release(keycodes[e.Keysym.Sym])
+				}
 			}
 		}
 
@@ -92,7 +94,7 @@ func main() {
 			for y := 0; y < chip8.Height; y++ {
 				// draw active pixels
 				if cpu.Pixels.GetPixel(x, y) > 0 {
-					renderer.DrawPoint(x, y)
+					renderer.DrawPoint(int32(x), int32(y))
 				}
 			}
 		}
